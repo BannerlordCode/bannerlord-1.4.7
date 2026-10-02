@@ -1,0 +1,1225 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Helpers;
+using TaleWorlds.CampaignSystem.Actions;
+using TaleWorlds.CampaignSystem.Conversation;
+using TaleWorlds.CampaignSystem.Encounters;
+using TaleWorlds.CampaignSystem.Extensions;
+using TaleWorlds.CampaignSystem.MapEvents;
+using TaleWorlds.CampaignSystem.Party;
+using TaleWorlds.CampaignSystem.Party.PartyComponents;
+using TaleWorlds.CampaignSystem.Roster;
+using TaleWorlds.CampaignSystem.Settlements;
+using TaleWorlds.Core;
+using TaleWorlds.Library;
+using TaleWorlds.Localization;
+using TaleWorlds.ObjectSystem;
+using TaleWorlds.SaveSystem;
+
+namespace TaleWorlds.CampaignSystem.Issues
+{
+	// Token: 0x0200035E RID: 862
+	public class CaravanAmbushIssueBehavior : CampaignBehaviorBase
+	{
+		// Token: 0x06003348 RID: 13128 RVA: 0x000D37B6 File Offset: 0x000D19B6
+		public override void RegisterEvents()
+		{
+			CampaignEvents.OnCheckForIssueEvent.AddNonSerializedListener(this, new Action<Hero>(this.OnCheckForIssue));
+			CampaignEvents.OnGameLoadFinishedEvent.AddNonSerializedListener(this, new Action(this.OnGameLoadFinished));
+		}
+
+		// Token: 0x06003349 RID: 13129 RVA: 0x000D37E8 File Offset: 0x000D19E8
+		private void OnCheckForIssue(Hero hero)
+		{
+			if (this.ConditionsHold(hero))
+			{
+				Settlement targetSettlement = this.GetTargetSettlement(hero.CurrentSettlement);
+				if (targetSettlement != null)
+				{
+					Campaign.Current.IssueManager.AddPotentialIssueData(hero, new PotentialIssueData(new PotentialIssueData.StartIssueDelegate(this.OnIssueSelected), typeof(CaravanAmbushIssueBehavior.CaravanAmbushIssue), IssueBase.IssueFrequency.Common, targetSettlement));
+				}
+			}
+		}
+
+		// Token: 0x0600334A RID: 13130 RVA: 0x000D383C File Offset: 0x000D1A3C
+		private IssueBase OnIssueSelected(in PotentialIssueData pid, Hero issueOwner)
+		{
+			PotentialIssueData potentialIssueData = pid;
+			return new CaravanAmbushIssueBehavior.CaravanAmbushIssue(issueOwner, potentialIssueData.RelatedObject as Settlement);
+		}
+
+		// Token: 0x0600334B RID: 13131 RVA: 0x000D3864 File Offset: 0x000D1A64
+		private bool ConditionsHold(Hero issueGiver)
+		{
+			return issueGiver != null && issueGiver.IsNotable && !issueGiver.OwnedCaravans.IsEmpty<CaravanPartyComponent>() && (issueGiver.IsArtisan || issueGiver.IsMerchant) && issueGiver.CurrentSettlement != null && !issueGiver.CurrentSettlement.HasPort;
+		}
+
+		// Token: 0x0600334C RID: 13132 RVA: 0x000D38B4 File Offset: 0x000D1AB4
+		private Settlement GetTargetSettlement(Settlement currentSettlement)
+		{
+			IEnumerable<Settlement> enumerable = Settlement.All.Where<Settlement>((Settlement t) => t.IsTown && t != currentSettlement && t.MapFaction != null && !t.MapFaction.IsAtWarWith(currentSettlement.MapFaction) && !t.IsUnderRaid && !t.IsUnderSiege);
+			if (!enumerable.Any<Settlement>())
+			{
+				return null;
+			}
+			return enumerable.MinBy<Settlement, float>((Settlement t) => Campaign.Current.Models.MapDistanceModel.GetDistance(t, currentSettlement, false, false, MobileParty.NavigationType.Default));
+		}
+
+		// Token: 0x0600334D RID: 13133 RVA: 0x000D3904 File Offset: 0x000D1B04
+		private void OnGameLoadFinished()
+		{
+			if (MBSaveLoad.LastLoadedGameVersion.IsOlderThan(ApplicationVersion.FromString("v1.3.0", 0)))
+			{
+				foreach (MapEvent mapEvent in Campaign.Current.MapEventManager.MapEvents)
+				{
+					if (mapEvent.IsInvulnerable && mapEvent.IsFieldBattle && mapEvent.BattleStartTime.ElapsedWeeksUntilNow > 1f)
+					{
+						mapEvent.FinalizeEvent();
+					}
+				}
+			}
+		}
+
+		// Token: 0x0600334E RID: 13134 RVA: 0x000D39A0 File Offset: 0x000D1BA0
+		public override void SyncData(IDataStore dataStore)
+		{
+		}
+
+		// Token: 0x0600334F RID: 13135 RVA: 0x000D39A4 File Offset: 0x000D1BA4
+		public static void UtilizePartyEscortBehavior(MobileParty escortedParty, MobileParty escortParty, ref bool isWaitingForEscortParty, float innerRadius, float outerRadius, MobilePartyHelper.ResumePartyEscortBehaviorDelegate onPartyEscortBehaviorResumed, bool showDebugSpheres = false)
+		{
+			if (!isWaitingForEscortParty)
+			{
+				if (escortParty.Position.DistanceSquared(escortedParty.Position) >= outerRadius * outerRadius)
+				{
+					escortedParty.SetMoveGoToPoint(escortedParty.Position, MobileParty.NavigationType.Default);
+					escortedParty.Ai.CheckPartyNeedsUpdate();
+					isWaitingForEscortParty = true;
+					return;
+				}
+			}
+			else if (escortParty.Position.DistanceSquared(escortedParty.Position) <= innerRadius * innerRadius)
+			{
+				onPartyEscortBehaviorResumed();
+				escortedParty.Ai.CheckPartyNeedsUpdate();
+				isWaitingForEscortParty = false;
+			}
+		}
+
+		// Token: 0x04000EB6 RID: 3766
+		private const IssueBase.IssueFrequency CaravanAmbushIssueFrequency = IssueBase.IssueFrequency.Common;
+
+		// Token: 0x020006FA RID: 1786
+		public class CaravanAmbushIssue : IssueBase
+		{
+			// Token: 0x060055E5 RID: 21989 RVA: 0x00194C02 File Offset: 0x00192E02
+			internal static void AutoGeneratedStaticCollectObjectsCaravanAmbushIssue(object o, List<object> collectedObjects)
+			{
+				((CaravanAmbushIssueBehavior.CaravanAmbushIssue)o).AutoGeneratedInstanceCollectObjects(collectedObjects);
+			}
+
+			// Token: 0x060055E6 RID: 21990 RVA: 0x00194C10 File Offset: 0x00192E10
+			protected override void AutoGeneratedInstanceCollectObjects(List<object> collectedObjects)
+			{
+				base.AutoGeneratedInstanceCollectObjects(collectedObjects);
+				collectedObjects.Add(this._targetSettlement);
+			}
+
+			// Token: 0x060055E7 RID: 21991 RVA: 0x00194C25 File Offset: 0x00192E25
+			internal static object AutoGeneratedGetMemberValue_targetSettlement(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssue)o)._targetSettlement;
+			}
+
+			// Token: 0x17001024 RID: 4132
+			// (get) Token: 0x060055E8 RID: 21992 RVA: 0x00194C32 File Offset: 0x00192E32
+			public override IssueBase.AlternativeSolutionScaleFlag AlternativeSolutionScaleFlags
+			{
+				get
+				{
+					return IssueBase.AlternativeSolutionScaleFlag.Casualties | IssueBase.AlternativeSolutionScaleFlag.FailureRisk;
+				}
+			}
+
+			// Token: 0x17001025 RID: 4133
+			// (get) Token: 0x060055E9 RID: 21993 RVA: 0x00194C36 File Offset: 0x00192E36
+			public override TextObject IssueBriefByIssueGiver
+			{
+				get
+				{
+					return new TextObject("{=kOxu3Lw0}Yes... I run caravans, as you may know. I lose a few to bandits from time to time, but generally my caravans are sufficiently well guarded to scare off the small gangs and move quickly enough to outrun the big ones.The problem is that there's a new bandit chief out there who knows his business, who has outfitted his men with horses and uses proper cavalry tactics.I’ve lost three caravans in a row, and I can’t afford to keep this up for long.[if:convo_stern][ib:hip]", null);
+				}
+			}
+
+			// Token: 0x17001026 RID: 4134
+			// (get) Token: 0x060055EA RID: 21994 RVA: 0x00194C43 File Offset: 0x00192E43
+			public override TextObject IssueAcceptByPlayer
+			{
+				get
+				{
+					return new TextObject("{=aJcChHfj}What are you planning to do about them?", null);
+				}
+			}
+
+			// Token: 0x17001027 RID: 4135
+			// (get) Token: 0x060055EB RID: 21995 RVA: 0x00194C50 File Offset: 0x00192E50
+			protected override int CompanionSkillRewardXP
+			{
+				get
+				{
+					return (int)(600f + 800f * base.IssueDifficultyMultiplier);
+				}
+			}
+
+			// Token: 0x17001028 RID: 4136
+			// (get) Token: 0x060055EC RID: 21996 RVA: 0x00194C68 File Offset: 0x00192E68
+			public override TextObject IssueQuestSolutionExplanationByIssueGiver
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=iWWKTOik}I've got a trick up my sleeve. We'll bait them. I've paid some of my workers to spread rumors about a particularly fat caravan laden with silverware heading out towards {TARGET_SETTLEMENT}. It is a trap, of course. I've got a bunch of mercenaries going with it, disguised as packers. But they could use some backup. Go and follow my caravan. Stay at a proper distance, until they are attacked. Then move in to finish the bandits once and for all. My caravan master will pay you {REWARD}{GOLD_ICON} when the fight is over.[if:convo_mocking_revenge][ib:confident2]", null);
+					textObject.SetTextVariable("TARGET_SETTLEMENT", this._targetSettlement.EncyclopediaLinkWithName);
+					textObject.SetTextVariable("REWARD", this.RewardGold);
+					textObject.SetTextVariable("GOLD_ICON", "{=!}<img src=\"General\\Icons\\Coin@2x\" extend=\"6\">");
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001029 RID: 4137
+			// (get) Token: 0x060055ED RID: 21997 RVA: 0x00194CBA File Offset: 0x00192EBA
+			public override TextObject IssueQuestSolutionAcceptByPlayer
+			{
+				get
+				{
+					return new TextObject("{=Ov3b2b8p}I'll help you myself.", null);
+				}
+			}
+
+			// Token: 0x1700102A RID: 4138
+			// (get) Token: 0x060055EE RID: 21998 RVA: 0x00194CC7 File Offset: 0x00192EC7
+			public override TextObject IssueAlternativeSolutionExplanationByIssueGiver
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=jiFCxZ4B}In that case you should send a good commander with some {TROOP_COUNT} men, just to be safe. And I'll send them back to you in {RETURN_DAYS} days. [if:convo_normal][ib:closed]", null);
+					textObject.SetTextVariable("TROOP_COUNT", base.GetTotalAlternativeSolutionNeededMenCount());
+					textObject.SetTextVariable("RETURN_DAYS", base.GetTotalAlternativeSolutionDurationInDays());
+					return textObject;
+				}
+			}
+
+			// Token: 0x1700102B RID: 4139
+			// (get) Token: 0x060055EF RID: 21999 RVA: 0x00194CF8 File Offset: 0x00192EF8
+			public override TextObject IssueAlternativeSolutionAcceptByPlayer
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=XLswis9W}I will lend you one of my best lieutenants and {TROOP_COUNT} men.", null);
+					textObject.SetTextVariable("TROOP_COUNT", base.GetTotalAlternativeSolutionNeededMenCount());
+					textObject.SetTextVariable("RETURN_DAYS", base.GetTotalAlternativeSolutionDurationInDays());
+					return textObject;
+				}
+			}
+
+			// Token: 0x1700102C RID: 4140
+			// (get) Token: 0x060055F0 RID: 22000 RVA: 0x00194D29 File Offset: 0x00192F29
+			public override TextObject IssueDiscussAlternativeSolution
+			{
+				get
+				{
+					return new TextObject("{=L3U98ygQ}We're still preparing the ambush. I hope to have your men back to you shortly.", null);
+				}
+			}
+
+			// Token: 0x1700102D RID: 4141
+			// (get) Token: 0x060055F1 RID: 22001 RVA: 0x00194D36 File Offset: 0x00192F36
+			public override TextObject IssueAlternativeSolutionResponseByIssueGiver
+			{
+				get
+				{
+					return new TextObject("{=Y9LNbRho}Thank you. I will put your men to good use.", null);
+				}
+			}
+
+			// Token: 0x1700102E RID: 4142
+			// (get) Token: 0x060055F2 RID: 22002 RVA: 0x00194D43 File Offset: 0x00192F43
+			public override bool IsThereLordSolution
+			{
+				get
+				{
+					return false;
+				}
+			}
+
+			// Token: 0x1700102F RID: 4143
+			// (get) Token: 0x060055F3 RID: 22003 RVA: 0x00194D46 File Offset: 0x00192F46
+			public override TextObject Title
+			{
+				get
+				{
+					return new TextObject("{=wF7uiYzy}Caravan Ambush", null);
+				}
+			}
+
+			// Token: 0x17001030 RID: 4144
+			// (get) Token: 0x060055F4 RID: 22004 RVA: 0x00194D54 File Offset: 0x00192F54
+			public override TextObject Description
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=H3B75sYi}A merchant asked you to follow a fake caravan that was sent out as a trap to destroy a particularly large and dangerous group of bandits.", null);
+					StringHelpers.SetCharacterProperties("NOTABLE", base.IssueOwner.CharacterObject, textObject, false);
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001031 RID: 4145
+			// (get) Token: 0x060055F5 RID: 22005 RVA: 0x00194D88 File Offset: 0x00192F88
+			protected override TextObject AlternativeSolutionStartLog
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=YbZYXRqt}{QUEST_GIVER.LINK} asked you to follow a caravan that he sent out as bait to destroy a particularly large and dangerous group of bandits. You ordered {COMPANION.LINK} and {TROOP_COUNT} of your men to follow the caravan from a safe distance and join in the fight once it is attacked. You expect them to return in {RETURN_DAYS} days with the news of success and {REWARD_GOLD}{GOLD_ICON}.", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.IssueOwner.CharacterObject, textObject, false);
+					StringHelpers.SetCharacterProperties("COMPANION", base.AlternativeSolutionHero.CharacterObject, textObject, false);
+					textObject.SetTextVariable("REWARD_GOLD", this.RewardGold);
+					textObject.SetTextVariable("TROOP_COUNT", this.AlternativeSolutionSentTroops.TotalManCount - 1);
+					textObject.SetTextVariable("RETURN_DAYS", base.GetTotalAlternativeSolutionDurationInDays());
+					textObject.SetTextVariable("GOLD_ICON", "{=!}<img src=\"General\\Icons\\Coin@2x\" extend=\"6\">");
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001032 RID: 4146
+			// (get) Token: 0x060055F6 RID: 22006 RVA: 0x00194E20 File Offset: 0x00193020
+			public override TextObject IssueAlternativeSolutionSuccessLog
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=PHAm9BIp}{COMPANION.LINK} and the men you sent with {?COMPANION.GENDER}her{?}him{\\?} successfully protected the caravan. {QUEST_GIVER.LINK} is happy and sends you {?QUES_GIVER.GENDER}her{?}him{\\?} regards with {REWARD_GOLD}{GOLD_ICON} he promised.", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.IssueOwner.CharacterObject, textObject, false);
+					StringHelpers.SetCharacterProperties("COMPANION", base.AlternativeSolutionHero.CharacterObject, textObject, false);
+					textObject.SetTextVariable("GOLD_ICON", "{=!}<img src=\"General\\Icons\\Coin@2x\" extend=\"6\">");
+					textObject.SetTextVariable("REWARD_GOLD", this.RewardGold);
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001033 RID: 4147
+			// (get) Token: 0x060055F7 RID: 22007 RVA: 0x00194E8D File Offset: 0x0019308D
+			public override TextObject IssuePlayerResponseAfterAlternativeExplanation
+			{
+				get
+				{
+					return new TextObject("{=DAYaprEi}Maybe I'll send someone to look.", null);
+				}
+			}
+
+			// Token: 0x17001034 RID: 4148
+			// (get) Token: 0x060055F8 RID: 22008 RVA: 0x00194E9A File Offset: 0x0019309A
+			public override bool IsThereAlternativeSolution
+			{
+				get
+				{
+					return true;
+				}
+			}
+
+			// Token: 0x17001035 RID: 4149
+			// (get) Token: 0x060055F9 RID: 22009 RVA: 0x00194E9D File Offset: 0x0019309D
+			public override int AlternativeSolutionBaseNeededMenCount
+			{
+				get
+				{
+					return 22 + MathF.Ceiling(30f * base.IssueDifficultyMultiplier);
+				}
+			}
+
+			// Token: 0x17001036 RID: 4150
+			// (get) Token: 0x060055FA RID: 22010 RVA: 0x00194EB3 File Offset: 0x001930B3
+			protected override int AlternativeSolutionBaseDurationInDaysInternal
+			{
+				get
+				{
+					return 3 + MathF.Ceiling(5f * base.IssueDifficultyMultiplier);
+				}
+			}
+
+			// Token: 0x17001037 RID: 4151
+			// (get) Token: 0x060055FB RID: 22011 RVA: 0x00194EC8 File Offset: 0x001930C8
+			protected override int RewardGold
+			{
+				get
+				{
+					return (int)(1000f + 3000f * base.IssueDifficultyMultiplier);
+				}
+			}
+
+			// Token: 0x060055FC RID: 22012 RVA: 0x00194EDD File Offset: 0x001930DD
+			public CaravanAmbushIssue(Hero issueOwner, Settlement targetSettlement)
+				: base(issueOwner, CampaignTime.DaysFromNow(20f))
+			{
+				this._targetSettlement = targetSettlement;
+			}
+
+			// Token: 0x060055FD RID: 22013 RVA: 0x00194EF7 File Offset: 0x001930F7
+			protected override float GetIssueEffectAmountInternal(IssueEffect issueEffect)
+			{
+				if (issueEffect == DefaultIssueEffects.SettlementProsperity)
+				{
+					return -0.3f;
+				}
+				if (issueEffect == DefaultIssueEffects.SettlementSecurity)
+				{
+					return -1f;
+				}
+				if (issueEffect == DefaultIssueEffects.IssueOwnerPower)
+				{
+					return -0.2f;
+				}
+				return 0f;
+			}
+
+			// Token: 0x060055FE RID: 22014 RVA: 0x00194F28 File Offset: 0x00193128
+			public override ValueTuple<SkillObject, int> GetAlternativeSolutionSkill(Hero hero)
+			{
+				return new ValueTuple<SkillObject, int>((hero.GetSkillValue(DefaultSkills.Tactics) >= hero.GetSkillValue(DefaultSkills.Roguery)) ? DefaultSkills.Tactics : DefaultSkills.Roguery, 120);
+			}
+
+			// Token: 0x060055FF RID: 22015 RVA: 0x00194F55 File Offset: 0x00193155
+			protected override void OnGameLoad()
+			{
+			}
+
+			// Token: 0x06005600 RID: 22016 RVA: 0x00194F57 File Offset: 0x00193157
+			protected override void HourlyTick()
+			{
+			}
+
+			// Token: 0x06005601 RID: 22017 RVA: 0x00194F5C File Offset: 0x0019315C
+			protected override QuestBase GenerateIssueQuest(string questId)
+			{
+				return new CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest("caravan_ambush_quest_" + CampaignTime.Now.ElapsedSecondsUntilNow, base.IssueOwner, this._targetSettlement, CampaignTime.DaysFromNow(20f), this.RewardGold, base.IssueDifficultyMultiplier);
+			}
+
+			// Token: 0x06005602 RID: 22018 RVA: 0x00194FAC File Offset: 0x001931AC
+			public override IssueBase.IssueFrequency GetFrequency()
+			{
+				return IssueBase.IssueFrequency.Common;
+			}
+
+			// Token: 0x06005603 RID: 22019 RVA: 0x00194FB0 File Offset: 0x001931B0
+			protected override bool CanPlayerTakeQuestConditions(Hero issueGiver, out IssueBase.PreconditionFlags flag, out Hero relationHero, out SkillObject skill, out int requiredGold)
+			{
+				flag = IssueBase.PreconditionFlags.None;
+				relationHero = issueGiver;
+				requiredGold = 0;
+				skill = null;
+				if (issueGiver.GetRelationWithPlayer() < -10f)
+				{
+					flag |= IssueBase.PreconditionFlags.Relation;
+				}
+				if (issueGiver.MapFaction.IsAtWarWith(Hero.MainHero.MapFaction))
+				{
+					flag |= IssueBase.PreconditionFlags.AtWar;
+				}
+				if (MobileParty.MainParty.MemberRoster.TotalHealthyCount < 30)
+				{
+					flag |= IssueBase.PreconditionFlags.NotEnoughTroops;
+				}
+				return flag == IssueBase.PreconditionFlags.None;
+			}
+
+			// Token: 0x06005604 RID: 22020 RVA: 0x0019501E File Offset: 0x0019321E
+			public override bool IssueStayAliveConditions()
+			{
+				return base.IssueOwner != null && base.IssueOwner.OwnedCaravans.Count > 0 && !base.IssueOwner.MapFaction.IsAtWarWith(Clan.PlayerClan);
+			}
+
+			// Token: 0x06005605 RID: 22021 RVA: 0x00195055 File Offset: 0x00193255
+			public override bool DoTroopsSatisfyAlternativeSolution(TroopRoster troopRoster, out TextObject explanation)
+			{
+				return QuestHelper.CheckRosterForAlternativeSolution(troopRoster, base.GetTotalAlternativeSolutionNeededMenCount(), out explanation, 2, false);
+			}
+
+			// Token: 0x06005606 RID: 22022 RVA: 0x00195066 File Offset: 0x00193266
+			public override bool IsTroopTypeNeededByAlternativeSolution(CharacterObject character)
+			{
+				return character.Tier >= 2;
+			}
+
+			// Token: 0x06005607 RID: 22023 RVA: 0x00195074 File Offset: 0x00193274
+			protected override void CompleteIssueWithTimedOutConsequences()
+			{
+			}
+
+			// Token: 0x06005608 RID: 22024 RVA: 0x00195076 File Offset: 0x00193276
+			public override bool AlternativeSolutionCondition(out TextObject explanation)
+			{
+				return QuestHelper.CheckRosterForAlternativeSolution(MobileParty.MainParty.MemberRoster, base.GetTotalAlternativeSolutionNeededMenCount(), out explanation, 2, false);
+			}
+
+			// Token: 0x06005609 RID: 22025 RVA: 0x00195090 File Offset: 0x00193290
+			protected override void AlternativeSolutionEndWithSuccessConsequence()
+			{
+				base.AlternativeSolutionHero.AddSkillXp(DefaultSkills.Scouting, (float)((int)(600f + 800f * base.IssueDifficultyMultiplier)));
+				float randomFloat = MBRandom.RandomFloat;
+				SkillObject skillObject;
+				if (randomFloat > 0.66f)
+				{
+					skillObject = DefaultSkills.OneHanded;
+				}
+				else if (randomFloat <= 0.66f && randomFloat > 0.33f)
+				{
+					skillObject = DefaultSkills.TwoHanded;
+				}
+				else
+				{
+					skillObject = DefaultSkills.Polearm;
+				}
+				base.AlternativeSolutionHero.AddSkillXp(skillObject, (float)((int)(600f + 800f * base.IssueDifficultyMultiplier)));
+				Clan.PlayerClan.AddRenown(3f, true);
+				this.RelationshipChangeWithIssueOwner = 5;
+			}
+
+			// Token: 0x0600560A RID: 22026 RVA: 0x0019512C File Offset: 0x0019332C
+			protected override void AlternativeSolutionEndWithFailureConsequence()
+			{
+				this.RelationshipChangeWithIssueOwner = -5;
+				base.IssueOwner.AddPower(-5f);
+			}
+
+			// Token: 0x04001C39 RID: 7225
+			private const float CaravanAmbushIssueDurationInDays = 20f;
+
+			// Token: 0x04001C3A RID: 7226
+			private const int AlternativeSolutionMinimumTroopTier = 2;
+
+			// Token: 0x04001C3B RID: 7227
+			private const int AlternativeSolutionRenownReward = 3;
+
+			// Token: 0x04001C3C RID: 7228
+			private const int AlternativeSolutionRelationReward = 5;
+
+			// Token: 0x04001C3D RID: 7229
+			private const int AlternativeSolutionRelationPenalty = -5;
+
+			// Token: 0x04001C3E RID: 7230
+			private const int CaravanAmbushIssueNotableMinimumRelation = -10;
+
+			// Token: 0x04001C3F RID: 7231
+			private const int CompanionSkill = 120;
+
+			// Token: 0x04001C40 RID: 7232
+			private const int MinimumRequiredMenCount = 30;
+
+			// Token: 0x04001C41 RID: 7233
+			[SaveableField(1)]
+			private readonly Settlement _targetSettlement;
+		}
+
+		// Token: 0x020006FB RID: 1787
+		public class CaravanAmbushIssueQuest : QuestBase
+		{
+			// Token: 0x0600560B RID: 22027 RVA: 0x00195146 File Offset: 0x00193346
+			internal static void AutoGeneratedStaticCollectObjectsCaravanAmbushIssueQuest(object o, List<object> collectedObjects)
+			{
+				((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o).AutoGeneratedInstanceCollectObjects(collectedObjects);
+			}
+
+			// Token: 0x0600560C RID: 22028 RVA: 0x00195154 File Offset: 0x00193354
+			protected override void AutoGeneratedInstanceCollectObjects(List<object> collectedObjects)
+			{
+				base.AutoGeneratedInstanceCollectObjects(collectedObjects);
+				collectedObjects.Add(this._targetSettlement);
+				collectedObjects.Add(this._caravanParty);
+				collectedObjects.Add(this._banditParty);
+				collectedObjects.Add(this._rewardItems);
+				CampaignTime.AutoGeneratedStaticCollectObjectsCampaignTime(this._vicinityCheckDisabledUntil, collectedObjects);
+			}
+
+			// Token: 0x0600560D RID: 22029 RVA: 0x001951A9 File Offset: 0x001933A9
+			internal static object AutoGeneratedGetMemberValue_targetSettlement(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._targetSettlement;
+			}
+
+			// Token: 0x0600560E RID: 22030 RVA: 0x001951B6 File Offset: 0x001933B6
+			internal static object AutoGeneratedGetMemberValue_issueDifficulty(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._issueDifficulty;
+			}
+
+			// Token: 0x0600560F RID: 22031 RVA: 0x001951C8 File Offset: 0x001933C8
+			internal static object AutoGeneratedGetMemberValue_caravanParty(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._caravanParty;
+			}
+
+			// Token: 0x06005610 RID: 22032 RVA: 0x001951D5 File Offset: 0x001933D5
+			internal static object AutoGeneratedGetMemberValue_banditParty(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._banditParty;
+			}
+
+			// Token: 0x06005611 RID: 22033 RVA: 0x001951E2 File Offset: 0x001933E2
+			internal static object AutoGeneratedGetMemberValue_vicinityCheckFailCounter(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._vicinityCheckFailCounter;
+			}
+
+			// Token: 0x06005612 RID: 22034 RVA: 0x001951F4 File Offset: 0x001933F4
+			internal static object AutoGeneratedGetMemberValue_rewardItems(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._rewardItems;
+			}
+
+			// Token: 0x06005613 RID: 22035 RVA: 0x00195201 File Offset: 0x00193401
+			internal static object AutoGeneratedGetMemberValue_isCaravanSaved(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._isCaravanSaved;
+			}
+
+			// Token: 0x06005614 RID: 22036 RVA: 0x00195213 File Offset: 0x00193413
+			internal static object AutoGeneratedGetMemberValue_vicinityCheckDisabledUntil(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._vicinityCheckDisabledUntil;
+			}
+
+			// Token: 0x06005615 RID: 22037 RVA: 0x00195225 File Offset: 0x00193425
+			internal static object AutoGeneratedGetMemberValue_isCaravanWaitingForEscort(object o)
+			{
+				return ((CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest)o)._isCaravanWaitingForEscort;
+			}
+
+			// Token: 0x17001038 RID: 4152
+			// (get) Token: 0x06005616 RID: 22038 RVA: 0x00195237 File Offset: 0x00193437
+			private float PartyEscortOuterRadius
+			{
+				get
+				{
+					return Campaign.Current.Models.EncounterModel.GetEncounterJoiningRadius * 2.36f;
+				}
+			}
+
+			// Token: 0x17001039 RID: 4153
+			// (get) Token: 0x06005617 RID: 22039 RVA: 0x00195253 File Offset: 0x00193453
+			private float PartyEscortInnerRadius
+			{
+				get
+				{
+					return Campaign.Current.Models.EncounterModel.GetEncounterJoiningRadius * 2.1f;
+				}
+			}
+
+			// Token: 0x1700103A RID: 4154
+			// (get) Token: 0x06005618 RID: 22040 RVA: 0x0019526F File Offset: 0x0019346F
+			private float VicinityCheckDistance
+			{
+				get
+				{
+					return Campaign.Current.Models.EncounterModel.GetEncounterJoiningRadius;
+				}
+			}
+
+			// Token: 0x1700103B RID: 4155
+			// (get) Token: 0x06005619 RID: 22041 RVA: 0x00195285 File Offset: 0x00193485
+			private int CaravanPartyTroopCount
+			{
+				get
+				{
+					return 22 + MathF.Ceiling(30f * this._issueDifficulty);
+				}
+			}
+
+			// Token: 0x1700103C RID: 4156
+			// (get) Token: 0x0600561A RID: 22042 RVA: 0x0019529B File Offset: 0x0019349B
+			private int BanditPartyTroopCount
+			{
+				get
+				{
+					return 25 + MathF.Ceiling(50f * this._issueDifficulty);
+				}
+			}
+
+			// Token: 0x1700103D RID: 4157
+			// (get) Token: 0x0600561B RID: 22043 RVA: 0x001952B1 File Offset: 0x001934B1
+			public override TextObject Title
+			{
+				get
+				{
+					return new TextObject("{=wF7uiYzy}Caravan Ambush", null);
+				}
+			}
+
+			// Token: 0x1700103E RID: 4158
+			// (get) Token: 0x0600561C RID: 22044 RVA: 0x001952BE File Offset: 0x001934BE
+			public override bool IsRemainingTimeHidden
+			{
+				get
+				{
+					return false;
+				}
+			}
+
+			// Token: 0x1700103F RID: 4159
+			// (get) Token: 0x0600561D RID: 22045 RVA: 0x001952C4 File Offset: 0x001934C4
+			private TextObject CaravanAmbushIssueQuestActivatedLogText
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=S4kpdrgw}{QUEST_GIVER.LINK}, {?IS_ARTISAN}an artisan{?}a merchant{\\?} from {SETTLEMENT}, asked you to follow a fake caravan that was bait for a particularly large and dangerous group of bandits. {?QUEST_GIVER.GENDER}She{?}He{\\?} suspects this fake caravan will be attacked on its way to {TARGET_SETTLEMENT}, so {?QUEST_GIVER.GENDER}she{?}he{\\?} wants you to follow the caravan from a safe distance and join in the fight once it is attacked. If you succeed, {?QUEST_GIVER.GENDER}she{?}he{\\?} promised to pay you {REWARD_GOLD}{GOLD_ICON}. ", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, textObject, false);
+					textObject.SetTextVariable("IS_ARTISAN", base.QuestGiver.IsArtisan ? 1 : 0);
+					textObject.SetTextVariable("SETTLEMENT", base.QuestGiver.CurrentSettlement.EncyclopediaLinkWithName);
+					textObject.SetTextVariable("TARGET_SETTLEMENT", this._targetSettlement.EncyclopediaLinkWithName);
+					textObject.SetTextVariable("REWARD_GOLD", this.RewardGold);
+					textObject.SetTextVariable("GOLD_ICON", "{=!}<img src=\"General\\Icons\\Coin@2x\" extend=\"6\">");
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001040 RID: 4160
+			// (get) Token: 0x0600561E RID: 22046 RVA: 0x0019536C File Offset: 0x0019356C
+			private TextObject CaravanAmbushIssueQuestSucceededLogText
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=g5bRX0dd}You have defeated the large group of bandits that {QUEST_GIVER.LINK} mentioned and {?QUEST_GIVER.GENDER}she{?}he{\\?} sends {?QUEST_GIVER.GENDER}her{?}his{\\?} regards with the {REWARD_GOLD}{GOLD_ICON} {?QUEST_GIVER.GENDER}she{?}he{\\?} promised and some trade goods as reward.", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, textObject, false);
+					textObject.SetTextVariable("REWARD_GOLD", this.RewardGold);
+					textObject.SetTextVariable("GOLD_ICON", "{=!}<img src=\"General\\Icons\\Coin@2x\" extend=\"6\">");
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001041 RID: 4161
+			// (get) Token: 0x0600561F RID: 22047 RVA: 0x001953C4 File Offset: 0x001935C4
+			private TextObject CaravanAmbushIssueQuestVicinityCheckFailedLogText
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=DbXMSRmA}You got too close to the caravan. The bandits saw you and withdrew. {QUEST_GIVER.LINK}'s plan failed and {?QUEST_GIVER.GENDER}she{?}he{\\?} will be very upset.", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, textObject, false);
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001042 RID: 4162
+			// (get) Token: 0x06005620 RID: 22048 RVA: 0x001953F8 File Offset: 0x001935F8
+			private TextObject CaravanAmbushIssueQuestCaravanDestroyedLogText
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=WtCSdcs9}You have failed to defeat the bandits, as {QUEST_GIVER.LINK} asked you to do.", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, textObject, false);
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001043 RID: 4163
+			// (get) Token: 0x06005621 RID: 22049 RVA: 0x0019542C File Offset: 0x0019362C
+			private TextObject CaravanAmbushIssueQuestTimeOutLogText
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=qi0wKvPX}You failed to catch up to the caravan before it was overwhelmed. {QUEST_GIVER.LINK} will be very upset about this.", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, textObject, false);
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001044 RID: 4164
+			// (get) Token: 0x06005622 RID: 22050 RVA: 0x00195460 File Offset: 0x00193660
+			private TextObject CaravanSurvivedWithoutHelpLogText
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=UFce0iyy}The caravan survived the battle without your help. You failed to keep your promise to {QUEST_GIVER.LINK}.", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, textObject, false);
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001045 RID: 4165
+			// (get) Token: 0x06005623 RID: 22051 RVA: 0x00195494 File Offset: 0x00193694
+			private TextObject CaravanAmbushIssueQuestHiredBanditsLogText
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=bdab7SmZ}You recruited the bandits who were giving {QUEST_GIVER.LINK} trouble. {?QUEST_GIVER.GENDER}she{?}he{\\?} is satisfied with this outcome, and sends you {REWARD_GOLD}{GOLD_ICON} that {?QUEST_GIVER.GENDER}she{?}he{\\?} promised.", null);
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, textObject, false);
+					textObject.SetTextVariable("REWARD_GOLD", this.RewardGold);
+					textObject.SetTextVariable("GOLD_ICON", "{=!}<img src=\"General\\Icons\\Coin@2x\" extend=\"6\">");
+					return textObject;
+				}
+			}
+
+			// Token: 0x17001046 RID: 4166
+			// (get) Token: 0x06005624 RID: 22052 RVA: 0x001954E9 File Offset: 0x001936E9
+			private TextObject CaravanAmbushWarDeclaredCancelLogText
+			{
+				get
+				{
+					TextObject textObject = new TextObject("{=dQl0Bnwm}Your clan is now at war with the {QUEST_GIVER.LINK}'s faction. Your agreement with {QUEST_GIVER.LINK} has been canceled.", null);
+					textObject.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, false);
+					return textObject;
+				}
+			}
+
+			// Token: 0x06005625 RID: 22053 RVA: 0x0019550D File Offset: 0x0019370D
+			public CaravanAmbushIssueQuest(string questId, Hero questGiver, Settlement targetSettlement, CampaignTime duration, int rewardGold, float issueDifficulty)
+				: base(questId, questGiver, duration, rewardGold)
+			{
+				this._targetSettlement = targetSettlement;
+				this._issueDifficulty = issueDifficulty;
+				this.SetDialogs();
+				base.InitializeQuestOnCreation();
+			}
+
+			// Token: 0x06005626 RID: 22054 RVA: 0x00195544 File Offset: 0x00193744
+			protected override void SetDialogs()
+			{
+				this.OfferDialogFlow = DialogFlow.CreateDialogFlow("issue_classic_quest_start", 100).NpcLine("{=1sbbbOyr}Excellent... I'm counting on you! The caravan will be leaving soon.[if:convo_normal][ib:hip]", null, null, null, null).Condition(() => Hero.OneToOneConversationHero == base.QuestGiver)
+					.Consequence(new ConversationSentence.OnConsequenceDelegate(this.OnQuestAccepted))
+					.CloseDialog();
+				this.DiscussDialogFlow = DialogFlow.CreateDialogFlow("quest_discuss", 100).NpcLine("{=5o9udV96}Yes? You should go already. The caravan is on its way.[if:convo_annoyed][ib:normal2]", null, null, null, null).Condition(() => Hero.OneToOneConversationHero == base.QuestGiver && !this._isCaravanSaved)
+					.BeginPlayerOptions(null, false)
+					.PlayerOption("{=DKiLA9f2}Don't worry, I'll find them.", null, null, null)
+					.NpcLine("{=ddEu5IFQ}I hope so.", null, null, null, null)
+					.CloseDialog()
+					.PlayerOption("{=zpqP5LsC}I'll go right away.", null, null, null)
+					.NpcLine("{=3ssQAe1t}Good to hear that", null, null, null, null)
+					.CloseDialog()
+					.EndPlayerOptions()
+					.CloseDialog();
+				Campaign.Current.ConversationManager.AddDialogFlow(this.GetCaravaneerDialogFlow(), this);
+			}
+
+			// Token: 0x06005627 RID: 22055 RVA: 0x00195630 File Offset: 0x00193830
+			private DialogFlow GetCaravaneerDialogFlow()
+			{
+				return DialogFlow.CreateDialogFlow("start", 125).NpcLine("{=LqEdr7sQ}Thank you, {?PLAYER.GENDER}milady{?}sir{\\?}. {QUEST_GIVER.LINK} had informed me that help would be on the way. We needed it, I think. Those were a pretty tough lot.", null, null, null, null).Condition(delegate
+				{
+					StringHelpers.SetCharacterProperties("QUEST_GIVER", base.QuestGiver.CharacterObject, null, false);
+					return CharacterObject.OneToOneConversationCharacter == ConversationHelper.GetConversationCharacterPartyLeader(this._caravanParty.Party) && this._isCaravanSaved;
+				})
+					.PlayerLine("{=MKbLhn9d}I'm glad we caught up to you in time.", null, null, null)
+					.NpcLine("{=yxg91L0a}We'll tell everyone what you did.[if:convo_happy][ib:normal2] Please take some of these goods in compensation. We have no intention to sell them anyway. Safe travels, {?PLAYER.GENDER}milady{?}sir{\\?}.", null, null, null, null)
+					.Consequence(delegate
+					{
+						Campaign.Current.ConversationManager.ConversationEndOneShot += this.OnQuestSucceeded;
+					})
+					.CloseDialog();
+			}
+
+			// Token: 0x06005628 RID: 22056 RVA: 0x0019569C File Offset: 0x0019389C
+			private void OnQuestAccepted()
+			{
+				base.StartQuest();
+				base.AddLog(this.CaravanAmbushIssueQuestActivatedLogText, false);
+				ItemRoster itemRoster = new ItemRoster();
+				itemRoster.AddToCounts(MBObjectManager.Instance.GetObject<ItemObject>("fish"), 20);
+				itemRoster.AddToCounts(MBObjectManager.Instance.GetObject<ItemObject>("grain"), 40);
+				itemRoster.AddToCounts(MBObjectManager.Instance.GetObject<ItemObject>("butter"), 20);
+				itemRoster.AddToCounts(DefaultItems.HardWood, 60);
+				PartyTemplateObject randomCaravanTemplate = CaravanHelper.GetRandomCaravanTemplate(base.QuestGiver.Culture, false, true);
+				this._caravanParty = CaravanPartyComponent.CreateCaravanParty(base.QuestGiver, base.QuestGiver.CurrentSettlement, randomCaravanTemplate, false, null, itemRoster, false);
+				this._caravanParty.MemberRoster.Clear();
+				this._caravanParty.MemberRoster.AddToCounts(base.QuestGiver.Culture.CaravanMaster, 1, false, 0, 0, true, -1);
+				this._caravanParty.MemberRoster.AddToCounts(base.QuestGiver.Culture.BasicTroop, this.CaravanPartyTroopCount, false, 0, 0, true, -1);
+				this._caravanParty.IgnoreByOtherPartiesTill(base.QuestDueTime);
+				Campaign.Current.MobilePartyLocator.UpdateLocator(this._caravanParty);
+				SetPartyAiAction.GetActionForVisitingSettlement(this._caravanParty, this._targetSettlement, MobileParty.NavigationType.Default, false, false);
+				this._caravanParty.Ai.SetDoNotMakeNewDecisions(true);
+				this._caravanParty.SetPartyUsedByQuest(true);
+				base.AddTrackedObject(this._caravanParty);
+				MobilePartyHelper.TryMatchPartySpeedWithItemWeight(this._caravanParty, MobileParty.MainParty.Speed * 0.7f, null);
+				Hideout hideout = SettlementHelper.FindNearestHideoutToMobileParty(MobileParty.MainParty, MobileParty.NavigationType.Default, (Settlement x) => x.IsActive);
+				Clan clan = Clan.BanditFactions.FirstOrDefault<Clan>((Clan x) => x.StringId == "looters");
+				PartyTemplateObject partyTemplateObject = Campaign.Current.ObjectManager.GetObject<PartyTemplateObject>("kingdom_hero_party_caravan_ambushers") ?? clan.DefaultPartyTemplate;
+				this._banditParty = BanditPartyComponent.CreateBanditParty("caravan_ambush_quest_" + clan.Name, clan, hideout.Settlement.Hideout, false, partyTemplateObject, this._targetSettlement.GatePosition);
+				this._banditParty.Party.SetCustomName(new TextObject("{=u1Pkt4HC}Raiders", null));
+				Campaign.Current.MobilePartyLocator.UpdateLocator(this._banditParty);
+				this._banditParty.MemberRoster.Clear();
+				this._banditParty.SetPartyUsedByQuest(true);
+				base.AddTrackedObject(this._banditParty);
+				for (int i = 0; i < this.BanditPartyTroopCount; i++)
+				{
+					List<ValueTuple<PartyTemplateStack, float>> list = new List<ValueTuple<PartyTemplateStack, float>>();
+					foreach (PartyTemplateStack partyTemplateStack in partyTemplateObject.Stacks)
+					{
+						list.Add(new ValueTuple<PartyTemplateStack, float>(partyTemplateStack, (float)(64 - partyTemplateStack.Character.Level)));
+					}
+					PartyTemplateStack partyTemplateStack2 = MBRandom.ChooseWeighted<PartyTemplateStack>(list);
+					this._banditParty.MemberRoster.AddToCounts(partyTemplateStack2.Character, 1, false, 0, 0, true, -1);
+				}
+				this._banditParty.ItemRoster.AddToCounts(MBObjectManager.Instance.GetObject<ItemObject>("sumpter_horse"), this.BanditPartyTroopCount / 4);
+				this._banditParty.IgnoreByOtherPartiesTill(base.QuestDueTime);
+				SetPartyAiAction.GetActionForEngagingParty(this._banditParty, this._caravanParty, MobileParty.NavigationType.Default, false);
+				this._banditParty.Ai.SetDoNotMakeNewDecisions(true);
+				for (int j = 0; j < 3; j++)
+				{
+					this._rewardItems.Add(Items.All.GetRandomElementWithPredicate<ItemObject>((ItemObject t) => t.IsTradeGood && !t.NotMerchandise));
+				}
+				this._vicinityCheckDisabledUntil = CampaignTime.HoursFromNow(1f);
+			}
+
+			// Token: 0x06005629 RID: 22057 RVA: 0x00195A90 File Offset: 0x00193C90
+			private void OnQuestSucceeded()
+			{
+				base.AddLog(this.CaravanAmbushIssueQuestSucceededLogText, false);
+				GiveGoldAction.ApplyBetweenCharacters(null, Hero.MainHero, this.RewardGold, false);
+				this.RelationshipChangeWithQuestGiver = 5;
+				Clan.PlayerClan.AddRenown(3f, true);
+				foreach (ItemObject itemObject in this._rewardItems)
+				{
+					MobileParty.MainParty.ItemRoster.AddToCounts(itemObject, 1);
+				}
+				if (PlayerEncounter.Current != null)
+				{
+					PlayerEncounter.LeaveEncounter = true;
+				}
+				base.CompleteQuestWithSuccess();
+			}
+
+			// Token: 0x0600562A RID: 22058 RVA: 0x00195B38 File Offset: 0x00193D38
+			private void OnPlayerHiredBandits()
+			{
+				base.AddLog(this.CaravanAmbushIssueQuestHiredBanditsLogText, false);
+				GiveGoldAction.ApplyBetweenCharacters(null, Hero.MainHero, this.RewardGold, false);
+				this.RelationshipChangeWithQuestGiver = 5;
+				Clan.PlayerClan.AddRenown(3f, true);
+				if (PlayerEncounter.Current != null)
+				{
+					PlayerEncounter.LeaveEncounter = true;
+				}
+				base.CompleteQuestWithSuccess();
+			}
+
+			// Token: 0x0600562B RID: 22059 RVA: 0x00195B90 File Offset: 0x00193D90
+			protected override void HourlyTick()
+			{
+				if (this._caravanParty != null && this._banditParty != null && base.IsOngoing)
+				{
+					if (this._caravanParty.MapEvent == null && !this._isCaravanSaved)
+					{
+						if (this._caravanParty.Position.DistanceSquared(this._banditParty.Position) <= Campaign.Current.Models.EncounterModel.GetEncounterJoiningRadius * 2.2f)
+						{
+							EncounterManager.StartPartyEncounter(this._banditParty.Party, this._caravanParty.Party);
+							return;
+						}
+						if (this._caravanParty.Position.DistanceSquared(base.QuestGiver.CurrentSettlement.Position) >= Campaign.Current.GetAverageDistanceBetweenClosestTwoTownsWithNavigationType(MobileParty.NavigationType.Default) * 0.5f && this._caravanParty.Position.DistanceSquared(MobileParty.MainParty.Position) <= this.VicinityCheckDistance * this.VicinityCheckDistance * 2f && this._vicinityCheckDisabledUntil.IsPast)
+						{
+							this._vicinityCheckFailCounter++;
+							if (this._vicinityCheckFailCounter == 3)
+							{
+								this._vicinityCheckDisabledUntil = CampaignTime.HoursFromNow(2.5f);
+								MBInformationManager.AddQuickInformation(new TextObject("{=uD2pfRAh}Get back immediately! If you keep this close to the caravan the ambushers will certainly notice you.", null), 0, null, null, "");
+							}
+							else if (this._vicinityCheckFailCounter < 4)
+							{
+								this._vicinityCheckDisabledUntil = CampaignTime.HoursFromNow(1.5f);
+								MBInformationManager.AddQuickInformation(new TextObject("{=ki1CWgcP}Warning! You are too close to the caravan. Stay a bit farther away.", null), 0, null, null, "");
+							}
+							if (this._vicinityCheckFailCounter >= 4)
+							{
+								this.OnFailedVicinityChecks();
+							}
+						}
+						CaravanAmbushIssueBehavior.UtilizePartyEscortBehavior(this._caravanParty, MobileParty.MainParty, ref this._isCaravanWaitingForEscort, this.PartyEscortInnerRadius, this.PartyEscortOuterRadius, new MobilePartyHelper.ResumePartyEscortBehaviorDelegate(this.ResumeCaravanMovement), false);
+					}
+					if (this._caravanParty.MapEvent != null && this._caravanParty.MapEvent.IsInvulnerable && this._caravanParty.MapEvent.BattleStartTime.ElapsedHoursUntilNow > 6f)
+					{
+						this._caravanParty.MapEvent.IsInvulnerable = false;
+					}
+				}
+			}
+
+			// Token: 0x0600562C RID: 22060 RVA: 0x00195DAC File Offset: 0x00193FAC
+			private void ResumeCaravanMovement()
+			{
+				SetPartyAiAction.GetActionForVisitingSettlement(this._caravanParty, this._targetSettlement, MobileParty.NavigationType.Default, false, false);
+			}
+
+			// Token: 0x0600562D RID: 22061 RVA: 0x00195DC2 File Offset: 0x00193FC2
+			private void OnFailedVicinityChecks()
+			{
+				base.AddLog(this.CaravanAmbushIssueQuestVicinityCheckFailedLogText, false);
+				this.RelationshipChangeWithQuestGiver = -5;
+				base.QuestGiver.AddPower(-5f);
+				this.HandlePartyAiAfterCompletion();
+				base.CompleteQuestWithFail(null);
+			}
+
+			// Token: 0x0600562E RID: 22062 RVA: 0x00195DF7 File Offset: 0x00193FF7
+			protected override void OnTimedOut()
+			{
+				base.AddLog(this.CaravanAmbushIssueQuestTimeOutLogText, false);
+				this.RelationshipChangeWithQuestGiver = -5;
+				base.QuestGiver.AddPower(-5f);
+			}
+
+			// Token: 0x0600562F RID: 22063 RVA: 0x00195E20 File Offset: 0x00194020
+			private void OnSettlementEntered(MobileParty party, Settlement settlement, Hero hero)
+			{
+				if (party == this._caravanParty)
+				{
+					Debug.FailedAssert("Caravan has arrived at settlement without encountering the bandits", "C:\\BuildAgent\\work\\mb3\\Source\\Bannerlord\\TaleWorlds.CampaignSystem\\Issues\\CaravanAmbushIssueBehavior.cs", "OnSettlementEntered", 718);
+					DestroyPartyAction.Apply(this._caravanParty.Party, this._caravanParty);
+					this._caravanParty = null;
+					this._banditParty.Ai.SetDoNotMakeNewDecisions(false);
+					base.CompleteQuestWithCancel(null);
+				}
+			}
+
+			// Token: 0x06005630 RID: 22064 RVA: 0x00195E84 File Offset: 0x00194084
+			protected override void RegisterEvents()
+			{
+				CampaignEvents.MapEventEnded.AddNonSerializedListener(this, new Action<MapEvent>(this.MapEventEnded));
+				CampaignEvents.MapEventStarted.AddNonSerializedListener(this, new Action<MapEvent, PartyBase, PartyBase>(this.MapEventStarted));
+				CampaignEvents.SettlementEntered.AddNonSerializedListener(this, new Action<MobileParty, Settlement, Hero>(this.OnSettlementEntered));
+				CampaignEvents.BanditPartyRecruited.AddNonSerializedListener(this, new Action<MobileParty>(this.OnBanditPartyRecruited));
+				CampaignEvents.WarDeclared.AddNonSerializedListener(this, new Action<IFaction, IFaction, DeclareWarAction.DeclareWarDetail>(this.OnWarDeclared));
+				CampaignEvents.OnClanChangedKingdomEvent.AddNonSerializedListener(this, new Action<Clan, Kingdom, Kingdom, ChangeKingdomAction.ChangeKingdomActionDetail, bool>(this.OnClanChangedKingdom));
+			}
+
+			// Token: 0x06005631 RID: 22065 RVA: 0x00195F1B File Offset: 0x0019411B
+			private void OnBanditPartyRecruited(MobileParty party)
+			{
+				if (party == this._banditParty)
+				{
+					this.OnPlayerHiredBandits();
+				}
+			}
+
+			// Token: 0x06005632 RID: 22066 RVA: 0x00195F2C File Offset: 0x0019412C
+			private void OnWarDeclared(IFaction faction1, IFaction faction2, DeclareWarAction.DeclareWarDetail declareWarDetail)
+			{
+				if (base.QuestGiver.CurrentSettlement.MapFaction.IsAtWarWith(Clan.PlayerClan.MapFaction))
+				{
+					base.CompleteQuestWithCancel(this.CaravanAmbushWarDeclaredCancelLogText);
+				}
+			}
+
+			// Token: 0x06005633 RID: 22067 RVA: 0x00195F5C File Offset: 0x0019415C
+			private void MapEventEnded(MapEvent mapEvent)
+			{
+				if (mapEvent.WinningSide != BattleSideEnum.None && mapEvent.DefeatedSide != BattleSideEnum.None)
+				{
+					MapEventSide mapEventSide = mapEvent.GetMapEventSide(mapEvent.WinningSide);
+					MapEventSide mapEventSide2 = mapEvent.GetMapEventSide(mapEvent.DefeatedSide);
+					if (mapEventSide2.Parties.Any<MapEventParty>((MapEventParty t) => t.Party == this._caravanParty.Party))
+					{
+						this.HandlePartyAiAfterCompletion();
+						this.OnCaravanDestroyed(mapEventSide.LeaderParty);
+						return;
+					}
+					if (mapEventSide2.Parties.Any<MapEventParty>((MapEventParty t) => t.Party == this._banditParty.Party))
+					{
+						this._isCaravanSaved = true;
+						this.HandlePartyAiAfterCompletion();
+						if (mapEventSide.IsMainPartyAmongParties())
+						{
+							if (this._caravanParty.IsActive && mapEventSide.Parties.Any<MapEventParty>((MapEventParty t) => t.Party == this._caravanParty.Party))
+							{
+								CampaignMapConversation.OpenConversation(new ConversationCharacterData(Hero.MainHero.CharacterObject, null, false, false, false, false, false, false), new ConversationCharacterData(ConversationHelper.GetConversationCharacterPartyLeader(this._caravanParty.Party), null, false, false, false, false, false, false));
+								return;
+							}
+							this.OnQuestSucceeded();
+							return;
+						}
+						else
+						{
+							this.OnCaravanSurvivedWithoutHelp();
+						}
+					}
+				}
+			}
+
+			// Token: 0x06005634 RID: 22068 RVA: 0x00196063 File Offset: 0x00194263
+			private void OnWarDeclared(IFaction faction1, IFaction faction2)
+			{
+				this.CheckFailureDueToDiplomaticState();
+			}
+
+			// Token: 0x06005635 RID: 22069 RVA: 0x0019606B File Offset: 0x0019426B
+			private void OnClanChangedKingdom(Clan clan, Kingdom oldKingdom, Kingdom newKingdom, ChangeKingdomAction.ChangeKingdomActionDetail detail, bool showNotification = true)
+			{
+				if (clan == Clan.PlayerClan && newKingdom != null)
+				{
+					this.CheckFailureDueToDiplomaticState();
+				}
+			}
+
+			// Token: 0x06005636 RID: 22070 RVA: 0x0019607E File Offset: 0x0019427E
+			private void CheckFailureDueToDiplomaticState()
+			{
+				if (base.QuestGiver.CurrentSettlement.MapFaction.IsAtWarWith(Clan.PlayerClan.MapFaction))
+				{
+					base.CompleteQuestWithCancel(this.CaravanAmbushWarDeclaredCancelLogText);
+				}
+			}
+
+			// Token: 0x06005637 RID: 22071 RVA: 0x001960AD File Offset: 0x001942AD
+			private void MapEventStarted(MapEvent mapEvent, PartyBase attackerParty, PartyBase defenderParty)
+			{
+				if (defenderParty.MobileParty == this._caravanParty && attackerParty.MobileParty == this._banditParty)
+				{
+					mapEvent.IsInvulnerable = true;
+				}
+			}
+
+			// Token: 0x06005638 RID: 22072 RVA: 0x001960D2 File Offset: 0x001942D2
+			private void OnCaravanSurvivedWithoutHelp()
+			{
+				base.AddLog(this.CaravanSurvivedWithoutHelpLogText, false);
+				ChangeRelationAction.ApplyPlayerRelation(base.QuestGiver, -5, true, true);
+				base.QuestGiver.AddPower(-5f);
+				this.HandlePartyAiAfterCompletion();
+				base.CompleteQuestWithFail(null);
+			}
+
+			// Token: 0x06005639 RID: 22073 RVA: 0x00196110 File Offset: 0x00194310
+			private void OnCaravanDestroyed(PartyBase destroyerParty)
+			{
+				base.AddLog(this.CaravanAmbushIssueQuestCaravanDestroyedLogText, false);
+				this.RelationshipChangeWithQuestGiver = -5;
+				base.QuestGiver.AddPower(-5f);
+				if (this._caravanParty.MapEvent != null)
+				{
+					this._caravanParty.MapEvent.IsInvulnerable = false;
+				}
+				this._caravanParty = null;
+				base.CompleteQuestWithFail(null);
+			}
+
+			// Token: 0x0600563A RID: 22074 RVA: 0x00196170 File Offset: 0x00194370
+			private void HandlePartyAiAfterCompletion()
+			{
+				if (this._caravanParty.IsActive)
+				{
+					this._caravanParty.Ai.SetDoNotMakeNewDecisions(false);
+					SetPartyAiAction.GetActionForVisitingSettlement(this._caravanParty, this._targetSettlement, MobileParty.NavigationType.Default, false, false);
+				}
+				if (this._banditParty.MapEvent != null)
+				{
+					this._banditParty.MapEvent.IsInvulnerable = false;
+				}
+				if (this._banditParty.IsActive)
+				{
+					this._banditParty.Ai.SetDoNotMakeNewDecisions(false);
+					SetPartyAiAction.GetActionForVisitingSettlement(this._banditParty, this._banditParty.HomeSettlement, MobileParty.NavigationType.Default, false, false);
+					return;
+				}
+				this._banditParty = null;
+			}
+
+			// Token: 0x0600563B RID: 22075 RVA: 0x0019620C File Offset: 0x0019440C
+			protected override void InitializeQuestOnGameLoad()
+			{
+				this.SetDialogs();
+				if (this._banditParty.MapEvent != null && this._banditParty.MapEvent.DefenderSide.LeaderParty.MobileParty != this._caravanParty && !this._banditParty.MapEvent.IsPlayerMapEvent)
+				{
+					this._banditParty.MapEvent.FinalizeEvent();
+				}
+				if (!this._banditParty.Ai.DoNotMakeNewDecisions || this._banditParty.TargetParty != this._caravanParty)
+				{
+					SetPartyAiAction.GetActionForEngagingParty(this._banditParty, this._caravanParty, MobileParty.NavigationType.Default, false);
+					this._banditParty.Ai.SetDoNotMakeNewDecisions(true);
+					this._banditParty.IgnoreByOtherPartiesTill(base.QuestDueTime);
+				}
+			}
+
+			// Token: 0x04001C42 RID: 7234
+			private const int VicinityCheckFailedRelationPenalty = -5;
+
+			// Token: 0x04001C43 RID: 7235
+			private const int VicinityCheckFailedPowerPenalty = -5;
+
+			// Token: 0x04001C44 RID: 7236
+			private const int CaravanDestroyedRelationPenalty = -5;
+
+			// Token: 0x04001C45 RID: 7237
+			private const int CaravanDestroyedPowerPenalty = -5;
+
+			// Token: 0x04001C46 RID: 7238
+			private const int TimeoutRelationPenalty = -5;
+
+			// Token: 0x04001C47 RID: 7239
+			private const int TimeoutPowerPenalty = -5;
+
+			// Token: 0x04001C48 RID: 7240
+			private const int QuestSucceededRelationReward = 5;
+
+			// Token: 0x04001C49 RID: 7241
+			private const int QuestSucceededRenownReward = 3;
+
+			// Token: 0x04001C4A RID: 7242
+			private const int VicinityCheckFailThreshold = 4;
+
+			// Token: 0x04001C4B RID: 7243
+			private const int NumberOfRandomRewardItems = 3;
+
+			// Token: 0x04001C4C RID: 7244
+			private const float MapEventInvulnerabilityDurationInHours = 6f;
+
+			// Token: 0x04001C4D RID: 7245
+			private const float CaravanMainPartySpeedRatio = 0.7f;
+
+			// Token: 0x04001C4E RID: 7246
+			[SaveableField(1)]
+			private readonly Settlement _targetSettlement;
+
+			// Token: 0x04001C4F RID: 7247
+			[SaveableField(2)]
+			private readonly float _issueDifficulty;
+
+			// Token: 0x04001C50 RID: 7248
+			[SaveableField(3)]
+			private MobileParty _caravanParty;
+
+			// Token: 0x04001C51 RID: 7249
+			[SaveableField(4)]
+			private MobileParty _banditParty;
+
+			// Token: 0x04001C52 RID: 7250
+			[SaveableField(5)]
+			private int _vicinityCheckFailCounter;
+
+			// Token: 0x04001C53 RID: 7251
+			[SaveableField(6)]
+			private List<ItemObject> _rewardItems = new List<ItemObject>();
+
+			// Token: 0x04001C54 RID: 7252
+			[SaveableField(7)]
+			private bool _isCaravanSaved;
+
+			// Token: 0x04001C55 RID: 7253
+			[SaveableField(8)]
+			private CampaignTime _vicinityCheckDisabledUntil;
+
+			// Token: 0x04001C56 RID: 7254
+			[SaveableField(10)]
+			private bool _isCaravanWaitingForEscort;
+		}
+
+		// Token: 0x020006FC RID: 1788
+		public class CaravanAmbushIssueTypeDefiner : SaveableTypeDefiner
+		{
+			// Token: 0x06005643 RID: 22083 RVA: 0x00196388 File Offset: 0x00194588
+			public CaravanAmbushIssueTypeDefiner()
+				: base(380000)
+			{
+			}
+
+			// Token: 0x06005644 RID: 22084 RVA: 0x00196395 File Offset: 0x00194595
+			protected override void DefineClassTypes()
+			{
+				base.AddClassDefinition(typeof(CaravanAmbushIssueBehavior.CaravanAmbushIssue), 1, null);
+				base.AddClassDefinition(typeof(CaravanAmbushIssueBehavior.CaravanAmbushIssueQuest), 2, null);
+			}
+		}
+	}
+}

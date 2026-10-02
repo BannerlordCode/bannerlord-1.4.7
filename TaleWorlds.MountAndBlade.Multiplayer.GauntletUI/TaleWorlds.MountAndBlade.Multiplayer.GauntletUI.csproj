@@ -1,0 +1,122 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ProjectGuid>{BD9D9D26-AD52-486B-953E-BA22BE5C642D}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>TaleWorlds.MountAndBlade.Multiplayer.GauntletUI</RootNamespace>
+    <AssemblyName>TaleWorlds.MountAndBlade.Multiplayer.GauntletUI</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <FileAlignment>512</FileAlignment>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NoStdLib>True</NoStdLib>
+    <EnableDefaultItems>False</EnableDefaultItems>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemGroup>
+    <Compile Include="LobbyPracticeStateGauntletScreen.cs" />
+    <Compile Include="Mission\MissionGauntletAdminPanel.cs" />
+    <Compile Include="Mission\MissionGauntletClassLoadout.cs" />
+    <Compile Include="Mission\MissionGauntletCultureSelection.cs" />
+    <Compile Include="Mission\MissionGauntletDeathCard.cs" />
+    <Compile Include="Mission\MissionGauntletDuelUI.cs" />
+    <Compile Include="Mission\MissionGauntletEndOfBattle.cs" />
+    <Compile Include="Mission\MissionGauntletEndOfRoundUIHandler.cs" />
+    <Compile Include="Mission\MissionGauntletKillNotificationUIHandler.cs" />
+    <Compile Include="Mission\MissionGauntletMultiplayerCheatView.cs" />
+    <Compile Include="Mission\MissionGauntletMultiplayerEscapeMenu.cs" />
+    <Compile Include="Mission\MissionGauntletMultiplayerHUDExtension.cs" />
+    <Compile Include="Mission\MissionGauntletMultiplayerMarkerUIHandler.cs" />
+    <Compile Include="Mission\MissionGauntletMultiplayerOrderUIHandler.cs" />
+    <Compile Include="Mission\MissionGauntletMultiplayerPracticeEscapeMenu.cs" />
+    <Compile Include="Mission\MissionGauntletMultiplayerScoreboard.cs" />
+    <Compile Include="Mission\MissionGauntletPollingProgress.cs" />
+    <Compile Include="Mission\MissionGauntletServerStatus.cs" />
+    <Compile Include="Mission\MissionGauntletTeamSelection.cs" />
+    <Compile Include="Mission\MissionGauntletVoiceChat.cs" />
+    <Compile Include="MultiplayerAdminInformationScreen.cs" />
+    <Compile Include="MultiplayerGauntletGameNotification.cs" />
+    <Compile Include="MultiplayerGauntletUISubModule.cs" />
+    <Compile Include="MultiplayerIntermissionScreen.cs" />
+    <Compile Include="MultiplayerLobbyGauntletScreen.cs" />
+    <Compile Include="MultiplayerReportPlayerScreen.cs" />
+    <Compile Include="MultiplayerSceneNotificationContextProvider.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\netstandard\netstandard.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63E7}</Project>
+      <Name>netstandard</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Core\TaleWorlds.Core.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63F4}</Project>
+      <Name>TaleWorlds.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Engine.GauntletUI\TaleWorlds.Engine.GauntletUI.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63FF}</Project>
+      <Name>TaleWorlds.Engine.GauntletUI</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Engine\TaleWorlds.Engine.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63FE}</Project>
+      <Name>TaleWorlds.Engine</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.InputSystem\TaleWorlds.InputSystem.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6405}</Project>
+      <Name>TaleWorlds.InputSystem</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Library\TaleWorlds.Library.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6406}</Project>
+      <Name>TaleWorlds.Library</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Localization\TaleWorlds.Localization.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6408}</Project>
+      <Name>TaleWorlds.Localization</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.MountAndBlade.Diamond\TaleWorlds.MountAndBlade.Diamond.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C640B}</Project>
+      <Name>TaleWorlds.MountAndBlade.Diamond</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.MountAndBlade.GauntletUI\TaleWorlds.MountAndBlade.GauntletUI.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6432}</Project>
+      <Name>TaleWorlds.MountAndBlade.GauntletUI</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.MountAndBlade.Multiplayer.ViewModelCollection\TaleWorlds.MountAndBlade.Multiplayer.ViewModelCollection.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C642F}</Project>
+      <Name>TaleWorlds.MountAndBlade.Multiplayer.ViewModelCollection</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.MountAndBlade.Multiplayer.View\TaleWorlds.MountAndBlade.Multiplayer.View.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C642E}</Project>
+      <Name>TaleWorlds.MountAndBlade.Multiplayer.View</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.MountAndBlade.Multiplayer\TaleWorlds.MountAndBlade.Multiplayer.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6428}</Project>
+      <Name>TaleWorlds.MountAndBlade.Multiplayer</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.MountAndBlade.ViewModelCollection\TaleWorlds.MountAndBlade.ViewModelCollection.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6416}</Project>
+      <Name>TaleWorlds.MountAndBlade.ViewModelCollection</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.MountAndBlade.View\TaleWorlds.MountAndBlade.View.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6434}</Project>
+      <Name>TaleWorlds.MountAndBlade.View</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.MountAndBlade\TaleWorlds.MountAndBlade.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C640C}</Project>
+      <Name>TaleWorlds.MountAndBlade</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.PlayerServices\TaleWorlds.PlayerServices.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C641E}</Project>
+      <Name>TaleWorlds.PlayerServices</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.ScreenSystem\TaleWorlds.ScreenSystem.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6421}</Project>
+      <Name>TaleWorlds.ScreenSystem</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.TwoDimension\TaleWorlds.TwoDimension.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6424}</Project>
+      <Name>TaleWorlds.TwoDimension</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+</Project>

@@ -1,0 +1,122 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ProjectGuid>{BD9D9D26-AD52-486B-953E-BA22BE5C63FA}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>TaleWorlds.Diamond</RootNamespace>
+    <AssemblyName>TaleWorlds.Diamond</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <FileAlignment>512</FileAlignment>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NoStdLib>True</NoStdLib>
+    <EnableDefaultItems>False</EnableDefaultItems>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemGroup>
+    <Compile Include="AccessObject.cs" />
+    <Compile Include="AccessObjectJsonConverter.cs" />
+    <Compile Include="AccessObjectResult.cs" />
+    <Compile Include="AesHelper.cs" />
+    <Compile Include="Client.cs" />
+    <Compile Include="ClientApplication\ClientApplicationConfiguration.cs" />
+    <Compile Include="ClientApplication\DiamondClientApplication.cs" />
+    <Compile Include="ClientApplication\DiamondClientApplicationObject.cs" />
+    <Compile Include="ClientApplication\GenericRestSessionProvider.cs" />
+    <Compile Include="ClientApplication\GenericThreadedRestSessionProvider.cs" />
+    <Compile Include="ClientApplication\SessionProviderType.cs" />
+    <Compile Include="ClientMessageHandler.cs" />
+    <Compile Include="EpicAccessObject.cs" />
+    <Compile Include="FunctionResult.cs" />
+    <Compile Include="FunctionResultJsonConverter.cs" />
+    <Compile Include="GDKAccessObject.cs" />
+    <Compile Include="GOGAccessObject.cs" />
+    <Compile Include="HandlerResult.cs" />
+    <Compile Include="IClient.cs" />
+    <Compile Include="IClientSession.cs" />
+    <Compile Include="IClientSessionProvider.cs" />
+    <Compile Include="IConnectionInformation.cs" />
+    <Compile Include="ILoginAccessProvider.cs" />
+    <Compile Include="InnerProcessConnectionInformation.cs" />
+    <Compile Include="LoginBanReason.cs" />
+    <Compile Include="LoginErrorCode.cs" />
+    <Compile Include="LoginMessage.cs" />
+    <Compile Include="LoginResult.cs" />
+    <Compile Include="LoginResultObject.cs" />
+    <Compile Include="LoginResultObjectJsonConverter.cs" />
+    <Compile Include="Message.cs" />
+    <Compile Include="MessageDescription.cs" />
+    <Compile Include="MessageJsonConverter.cs" />
+    <Compile Include="PeerId.cs" />
+    <Compile Include="PeerIdJsonConverter.cs" />
+    <Compile Include="PlayerIdExtensions.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="PSAccessObject.cs" />
+    <Compile Include="Rest\AliveMessage.cs" />
+    <Compile Include="Rest\ClientRestSession.cs" />
+    <Compile Include="Rest\ClientRestSessionTask.cs" />
+    <Compile Include="Rest\ConnectMessage.cs" />
+    <Compile Include="Rest\DisconnectMessage.cs" />
+    <Compile Include="Rest\MessageType.cs" />
+    <Compile Include="Rest\RestData.cs" />
+    <Compile Include="Rest\RestDataJsonConverter.cs" />
+    <Compile Include="Rest\RestFunctionResult.cs" />
+    <Compile Include="Rest\RestObjectFunctionResult.cs" />
+    <Compile Include="Rest\RestObjectRequestMessage.cs" />
+    <Compile Include="Rest\RestObjectResponseMessage.cs" />
+    <Compile Include="Rest\RestRequestMessage.cs" />
+    <Compile Include="Rest\RestResponse.cs" />
+    <Compile Include="Rest\RestResponseMessage.cs" />
+    <Compile Include="SessionCredentials.cs" />
+    <Compile Include="SessionKey.cs" />
+    <Compile Include="Socket\ClientSocketSession.cs" />
+    <Compile Include="Socket\SocketMessage.cs" />
+    <Compile Include="SteamAccessObject.cs" />
+    <Compile Include="TestAccessObject.cs" />
+    <Compile Include="ThreadedClient.cs" />
+    <Compile Include="ThreadedClientCantConnectTask.cs" />
+    <Compile Include="ThreadedClientConnectedTask.cs" />
+    <Compile Include="ThreadedClientDisconnectedTask.cs" />
+    <Compile Include="ThreadedClientHandleMessageTask.cs" />
+    <Compile Include="ThreadedClientSession.cs" />
+    <Compile Include="ThreadedClientSessionConnectTask.cs" />
+    <Compile Include="ThreadedClientSessionDisconnectTask.cs" />
+    <Compile Include="ThreadedClientSessionFunctionTask.cs" />
+    <Compile Include="ThreadedClientSessionLoginTask.cs" />
+    <Compile Include="ThreadedClientSessionMessageTask.cs" />
+    <Compile Include="ThreadedClientSessionTask.cs" />
+    <Compile Include="ThreadedClientTask.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\netstandard\netstandard.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63E7}</Project>
+      <Name>netstandard</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Newtonsoft.Json\Newtonsoft.Json.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63EB}</Project>
+      <Name>Newtonsoft.Json</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Library\TaleWorlds.Library.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6406}</Project>
+      <Name>TaleWorlds.Library</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Localization\TaleWorlds.Localization.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6408}</Project>
+      <Name>TaleWorlds.Localization</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Network\TaleWorlds.Network.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6418}</Project>
+      <Name>TaleWorlds.Network</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.PlayerServices\TaleWorlds.PlayerServices.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C641E}</Project>
+      <Name>TaleWorlds.PlayerServices</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.ServiceDiscovery.Client\TaleWorlds.ServiceDiscovery.Client.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6422}</Project>
+      <Name>TaleWorlds.ServiceDiscovery.Client</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+</Project>

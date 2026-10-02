@@ -1,0 +1,59 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ProjectGuid>{BD9D9D26-AD52-486B-953E-BA22BE5C643F}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>StoryMode.ViewModelCollection</RootNamespace>
+    <AssemblyName>StoryMode.ViewModelCollection</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <FileAlignment>512</FileAlignment>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NoStdLib>True</NoStdLib>
+    <EnableDefaultItems>False</EnableDefaultItems>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemGroup>
+    <Compile Include="Map\ConspiracyQuestMapNotificationItemVM.cs" />
+    <Compile Include="Missions\TrainingFieldObjectiveItemVM.cs" />
+    <Compile Include="Missions\TrainingFieldObjectivesVM.cs" />
+    <Compile Include="Missions\TrainingObjectiveKeyVM.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\netstandard\netstandard.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63E7}</Project>
+      <Name>netstandard</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\StoryMode\StoryMode.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C643B}</Project>
+      <Name>StoryMode</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.CampaignSystem.ViewModelCollection\TaleWorlds.CampaignSystem.ViewModelCollection.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63F3}</Project>
+      <Name>TaleWorlds.CampaignSystem.ViewModelCollection</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.CampaignSystem\TaleWorlds.CampaignSystem.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63F2}</Project>
+      <Name>TaleWorlds.CampaignSystem</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Core\TaleWorlds.Core.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63F4}</Project>
+      <Name>TaleWorlds.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.InputSystem\TaleWorlds.InputSystem.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6405}</Project>
+      <Name>TaleWorlds.InputSystem</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Library\TaleWorlds.Library.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6406}</Project>
+      <Name>TaleWorlds.Library</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Localization\TaleWorlds.Localization.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6408}</Project>
+      <Name>TaleWorlds.Localization</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+</Project>

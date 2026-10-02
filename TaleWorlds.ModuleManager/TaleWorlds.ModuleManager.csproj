@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ProjectGuid>{BD9D9D26-AD52-486B-953E-BA22BE5C6409}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>TaleWorlds.ModuleManager</RootNamespace>
+    <AssemblyName>TaleWorlds.ModuleManager</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <FileAlignment>512</FileAlignment>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NoStdLib>True</NoStdLib>
+    <EnableDefaultItems>False</EnableDefaultItems>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemGroup>
+    <Compile Include="DependedModule.cs" />
+    <Compile Include="Extensions.cs" />
+    <Compile Include="IPlatformModuleExtension.cs" />
+    <Compile Include="ModuleCategory.cs" />
+    <Compile Include="ModuleHelper.cs" />
+    <Compile Include="ModuleInfo.cs" />
+    <Compile Include="ModuleType.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SubModuleInfo.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\netstandard\netstandard.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63E7}</Project>
+      <Name>netstandard</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Library\TaleWorlds.Library.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6406}</Project>
+      <Name>TaleWorlds.Library</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+</Project>

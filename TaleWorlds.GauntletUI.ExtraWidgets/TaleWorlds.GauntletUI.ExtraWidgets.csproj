@@ -1,0 +1,73 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ProjectGuid>{BD9D9D26-AD52-486B-953E-BA22BE5C6403}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>TaleWorlds.GauntletUI.ExtraWidgets</RootNamespace>
+    <AssemblyName>TaleWorlds.GauntletUI.ExtraWidgets</AssemblyName>
+    <GenerateAssemblyInfo>False</GenerateAssemblyInfo>
+    <FileAlignment>512</FileAlignment>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NoStdLib>True</NoStdLib>
+    <EnableDefaultItems>False</EnableDefaultItems>
+  </PropertyGroup>
+  <PropertyGroup />
+  <ItemGroup>
+    <Compile Include="AnimatedNumberTextWidget.cs" />
+    <Compile Include="CustomWidgetManager.cs" />
+    <Compile Include="DelayedStateChanger.cs" />
+    <Compile Include="DialogButtonsParentWidget.cs" />
+    <Compile Include="DisabledAlphaChangerWidget.cs" />
+    <Compile Include="FillBar.cs" />
+    <Compile Include="FillBarHorizontalWidget.cs" />
+    <Compile Include="FillBarVerticalClipTierColorsWidget.cs" />
+    <Compile Include="FillBarVerticalClipWidget.cs" />
+    <Compile Include="FillBarVerticalWidget.cs" />
+    <Compile Include="FillBarWidget.cs" />
+    <Compile Include="Graph\GraphLinePointWidget.cs" />
+    <Compile Include="Graph\GraphLineWidget.cs" />
+    <Compile Include="Graph\GraphWidget.cs" />
+    <Compile Include="InputKeyVisualWidget.cs" />
+    <Compile Include="MouseWidget.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ScrollingRichTextWidget.cs" />
+    <Compile Include="ScrollingTextWidget.cs" />
+    <Compile Include="SiblingIndexVisibilityWidget.cs" />
+    <Compile Include="SmoothDecreaseIndicatorFillBar.cs" />
+    <Compile Include="StateSyncWidget.cs" />
+    <Compile Include="StringBasedVisibilityWidget.cs" />
+    <Compile Include="TooltipPositioningType.cs" />
+    <Compile Include="TooltipWidget.cs" />
+    <Compile Include="TwoWaySliderWidget.cs" />
+    <Compile Include="ValueBasedVisibilityWidget.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\netstandard\netstandard.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63E7}</Project>
+      <Name>netstandard</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\System.Numerics.Vectors\System.Numerics.Vectors.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C63EF}</Project>
+      <Name>System.Numerics.Vectors</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.GauntletUI\TaleWorlds.GauntletUI.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6402}</Project>
+      <Name>TaleWorlds.GauntletUI</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.InputSystem\TaleWorlds.InputSystem.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6405}</Project>
+      <Name>TaleWorlds.InputSystem</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.Library\TaleWorlds.Library.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6406}</Project>
+      <Name>TaleWorlds.Library</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\TaleWorlds.TwoDimension\TaleWorlds.TwoDimension.csproj">
+      <Project>{BD9D9D26-AD52-486B-953E-BA22BE5C6424}</Project>
+      <Name>TaleWorlds.TwoDimension</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+</Project>

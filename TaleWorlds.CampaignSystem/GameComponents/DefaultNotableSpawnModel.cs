@@ -1,0 +1,47 @@
+﻿using System;
+using TaleWorlds.CampaignSystem.ComponentInterfaces;
+using TaleWorlds.CampaignSystem.Settlements;
+
+namespace TaleWorlds.CampaignSystem.GameComponents
+{
+	// Token: 0x02000130 RID: 304
+	public class DefaultNotableSpawnModel : NotableSpawnModel
+	{
+		// Token: 0x0600190F RID: 6415 RVA: 0x0007BF3C File Offset: 0x0007A13C
+		public override int GetTargetNotableCountForSettlement(Settlement settlement, Occupation occupation)
+		{
+			int num = 0;
+			if (settlement.IsTown)
+			{
+				if (occupation == Occupation.Merchant)
+				{
+					num = 2;
+				}
+				else if (occupation == Occupation.GangLeader)
+				{
+					num = 2;
+				}
+				else if (occupation == Occupation.Artisan)
+				{
+					num = 1;
+				}
+				else
+				{
+					num = 0;
+				}
+			}
+			else if (settlement.IsVillage)
+			{
+				if (occupation == Occupation.Headman)
+				{
+					num = 1;
+				}
+				else if (occupation == Occupation.RuralNotable)
+				{
+					num = 2;
+				}
+			}
+			return num;
+		}
+	}
+}

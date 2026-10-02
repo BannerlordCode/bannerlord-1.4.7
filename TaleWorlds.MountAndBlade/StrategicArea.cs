@@ -1,0 +1,829 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using TaleWorlds.Core;
+using TaleWorlds.DotNet;
+using TaleWorlds.Engine;
+using TaleWorlds.Library;
+
+namespace TaleWorlds.MountAndBlade
+{
+	// Token: 0x02000165 RID: 357
+	public class StrategicArea : MissionObject, IDetachment
+	{
+		// Token: 0x170003F5 RID: 1013
+		// (get) Token: 0x0600127B RID: 4731 RVA: 0x0003A97B File Offset: 0x00038B7B
+		public bool IsLoose
+		{
+			get
+			{
+				return true;
+			}
+		}
+
+		// Token: 0x170003F6 RID: 1014
+		// (get) Token: 0x0600127C RID: 4732 RVA: 0x0003A97E File Offset: 0x00038B7E
+		public MBReadOnlyList<Formation> UserFormations
+		{
+			get
+			{
+				return this._userFormations;
+			}
+		}
+
+		// Token: 0x170003F7 RID: 1015
+		// (get) Token: 0x0600127D RID: 4733 RVA: 0x0003A986 File Offset: 0x00038B86
+		public float DistanceToCheck
+		{
+			get
+			{
+				return this._distanceToCheck;
+			}
+		}
+
+		// Token: 0x170003F8 RID: 1016
+		// (get) Token: 0x0600127E RID: 4734 RVA: 0x0003A98E File Offset: 0x00038B8E
+		public bool IgnoreHeight
+		{
+			get
+			{
+				return this._ignoreHeight;
+			}
+		}
+
+		// Token: 0x170003F9 RID: 1017
+		// (get) Token: 0x0600127F RID: 4735 RVA: 0x0003A996 File Offset: 0x00038B96
+		// (set) Token: 0x06001280 RID: 4736 RVA: 0x0003A9A0 File Offset: 0x00038BA0
+		public bool IsActive
+		{
+			get
+			{
+				return this._isActive;
+			}
+			set
+			{
+				if (value != this._isActive)
+				{
+					List<Team> list = Mission.Current.Teams.Where<Team>((Team t) => this.IsUsableBy(t.Side)).ToList<Team>();
+					this._isActive = value;
+					foreach (Team team in list)
+					{
+						if (team.TeamAI != null)
+						{
+							if (this._isActive)
+							{
+								team.TeamAI.AddStrategicArea(this);
+							}
+							else
+							{
+								team.TeamAI.RemoveStrategicArea(this);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Token: 0x06001281 RID: 4737 RVA: 0x0003AA40 File Offset: 0x00038C40
+		protected internal override void OnInit()
+		{
+			base.OnInit();
+			this._agents = new List<Agent>();
+			this._userFormations = new MBList<Formation>();
+			this._unitSpacing = ArrangementOrder.GetUnitSpacingOf(ArrangementOrder.ArrangementOrderEnum.Line);
+			this._capacity = this.CalculateCapacity();
+			this._simulationFormations = new Dictionary<Formation, Formation>();
+			this._isActive = true;
+			for (int i = 0; i < 5; i++)
+			{
+				this._strategicAreaSidesScoreTally[i] = new StrategicArea.StrategicAreaMutableTuple(0, 0);
+			}
+		}
+
+		// Token: 0x06001282 RID: 4738 RVA: 0x0003AAAE File Offset: 0x00038CAE
+		private int CalculateCapacity()
+		{
+			return MathF.Max(1, MathF.Ceiling(MathF.Max(1f, this._width) * MathF.Max(1f, this._depth)));
+		}
+
+		// Token: 0x06001283 RID: 4739 RVA: 0x0003AADC File Offset: 0x00038CDC
+		public Vec3 GetGroundPosition()
+		{
+			this.CacheGlobalWorldFrame();
+			return this._cachedGlobalWorldFrame.Origin.GetGroundVec3();
+		}
+
+		// Token: 0x06001284 RID: 4740 RVA: 0x0003AAF4 File Offset: 0x00038CF4
+		public void DetermineAssociatedDestructibleComponents(IEnumerable<DestructableComponent> destructibleComponents)
+		{
+			this._nearbyDestructibleObjects = new List<DestructableComponent>();
+			foreach (DestructableComponent destructableComponent in destructibleComponents)
+			{
+				destructableComponent.GameEntity.GetGlobalFrame();
+				Vec3 vec;
+				Vec3 vec2;
+				destructableComponent.GameEntity.GetPhysicsMinMax(true, out vec, out vec2, false);
+				if (((vec2 + vec) * 0.5f).DistanceSquared(base.GameEntity.GlobalPosition) <= 9f)
+				{
+					this._nearbyDestructibleObjects.Add(destructableComponent);
+				}
+			}
+			foreach (DestructableComponent destructableComponent2 in this._nearbyDestructibleObjects)
+			{
+				destructableComponent2.OnDestroyed += new DestructableComponent.OnHitTakenAndDestroyedDelegate(this.OnCoveringDestructibleObjectDestroyed);
+			}
+		}
+
+		// Token: 0x06001285 RID: 4741 RVA: 0x0003ABEC File Offset: 0x00038DEC
+		public void OnParentGameEntityVisibilityChanged(bool isVisible)
+		{
+			this.IsActive = isVisible;
+		}
+
+		// Token: 0x06001286 RID: 4742 RVA: 0x0003ABF5 File Offset: 0x00038DF5
+		private void OnCoveringDestructibleObjectDestroyed(DestructableComponent destroyedComponent, Agent destroyerAgent, in MissionWeapon weapon, ScriptComponentBehavior attackerScriptComponentBehavior, int inflictedDamage)
+		{
+			this.IsActive = false;
+		}
+
+		// Token: 0x06001287 RID: 4743 RVA: 0x0003AC00 File Offset: 0x00038E00
+		protected override void OnRemoved(int removeReason)
+		{
+			base.OnRemoved(removeReason);
+			foreach (DestructableComponent destructableComponent in this._nearbyDestructibleObjects)
+			{
+				destructableComponent.OnDestroyed -= new DestructableComponent.OnHitTakenAndDestroyedDelegate(this.OnCoveringDestructibleObjectDestroyed);
+			}
+		}
+
+		// Token: 0x06001288 RID: 4744 RVA: 0x0003AC64 File Offset: 0x00038E64
+		public void InitializeAutogenerated(float width, int capacity, BattleSideEnum side)
+		{
+			this._width = width;
+			this._capacity = capacity;
+			this._side = side;
+		}
+
+		// Token: 0x06001289 RID: 4745 RVA: 0x0003AC7B File Offset: 0x00038E7B
+		public void AddAgent(Agent agent, int slotIndex = -1, Agent.AIScriptedFrameFlags customFlags = Agent.AIScriptedFrameFlags.None)
+		{
+			this._agents.Add(agent);
+			if (this._capacity == 1)
+			{
+				this.CacheGlobalWorldFrame();
+			}
+			agent.SetPreciseRangedAimingEnabled(true);
+		}
+
+		// Token: 0x0600128A RID: 4746 RVA: 0x0003AC9F File Offset: 0x00038E9F
+		public void AddAgentAtSlotIndex(Agent agent, int slotIndex = -1)
+		{
+			this.AddAgent(agent, slotIndex, Agent.AIScriptedFrameFlags.None);
+			Formation formation = agent.Formation;
+			if (formation != null)
+			{
+				formation.DetachUnit(agent, true);
+			}
+			agent.Detachment = this;
+			agent.SetDetachmentWeight(1f);
+		}
+
+		// Token: 0x0600128B RID: 4747 RVA: 0x0003ACCF File Offset: 0x00038ECF
+		void IDetachment.FormationStartUsing(Formation formation)
+		{
+			this._userFormations.Add(formation);
+		}
+
+		// Token: 0x0600128C RID: 4748 RVA: 0x0003ACDD File Offset: 0x00038EDD
+		void IDetachment.FormationStopUsing(Formation formation)
+		{
+			this._userFormations.Remove(formation);
+		}
+
+		// Token: 0x0600128D RID: 4749 RVA: 0x0003ACEC File Offset: 0x00038EEC
+		public bool IsUsedByFormation(Formation formation)
+		{
+			return this._userFormations.Contains(formation);
+		}
+
+		// Token: 0x0600128E RID: 4750 RVA: 0x0003ACFA File Offset: 0x00038EFA
+		Agent IDetachment.GetMovingAgentAtSlotIndex(int slotIndex)
+		{
+			return null;
+		}
+
+		// Token: 0x0600128F RID: 4751 RVA: 0x0003AD00 File Offset: 0x00038F00
+		void IDetachment.GetSlotIndexWeightTuples(List<ValueTuple<int, float>> slotIndexWeightTuples)
+		{
+			for (int i = this._agents.Count; i < this._capacity; i++)
+			{
+				slotIndexWeightTuples.Add(new ValueTuple<int, float>(i, StrategicArea.CalculateWeight(this._capacity, i)));
+			}
+		}
+
+		// Token: 0x06001290 RID: 4752 RVA: 0x0003AD40 File Offset: 0x00038F40
+		bool IDetachment.IsSlotAtIndexAvailableForAgent(int slotIndex, Agent agent)
+		{
+			return agent.CanBeAssignedForScriptedMovement() && slotIndex < this._capacity && slotIndex >= this._agents.Count && this.IsAgentEligible(agent) && !this.IsAgentOnInconvenientNavmesh(agent);
+		}
+
+		// Token: 0x06001291 RID: 4753 RVA: 0x0003AD78 File Offset: 0x00038F78
+		private bool IsAgentOnInconvenientNavmesh(Agent agent)
+		{
+			if (Mission.Current.MissionTeamAIType != Mission.MissionTeamAITypeEnum.Siege)
+			{
+				return false;
+			}
+			int currentNavigationFaceId = agent.GetCurrentNavigationFaceId();
+			TeamAISiegeComponent teamAISiegeComponent;
+			if ((teamAISiegeComponent = agent.Team.TeamAI as TeamAISiegeComponent) != null)
+			{
+				if (teamAISiegeComponent is TeamAISiegeAttacker && currentNavigationFaceId % 10 == 1)
+				{
+					return true;
+				}
+				if (teamAISiegeComponent is TeamAISiegeDefender && currentNavigationFaceId % 10 != 1)
+				{
+					return true;
+				}
+				foreach (int num in teamAISiegeComponent.DifficultNavmeshIDs)
+				{
+					if (currentNavigationFaceId == num)
+					{
+						return true;
+					}
+				}
+				return false;
+			}
+			return false;
+		}
+
+		// Token: 0x06001292 RID: 4754 RVA: 0x0003AE20 File Offset: 0x00039020
+		public bool IsAgentEligible(Agent agent)
+		{
+			return agent.IsRangedCached;
+		}
+
+		// Token: 0x06001293 RID: 4755 RVA: 0x0003AE28 File Offset: 0x00039028
+		void IDetachment.UnmarkDetachment()
+		{
+		}
+
+		// Token: 0x06001294 RID: 4756 RVA: 0x0003AE2A File Offset: 0x0003902A
+		bool IDetachment.IsDetachmentRecentlyEvaluated()
+		{
+			return false;
+		}
+
+		// Token: 0x06001295 RID: 4757 RVA: 0x0003AE2D File Offset: 0x0003902D
+		void IDetachment.MarkSlotAtIndex(int slotIndex)
+		{
+			Debug.FailedAssert("This should never have been called because this detachment does not seek to replace moving agents.", "C:\\BuildAgent\\work\\mb3\\Source\\Bannerlord\\TaleWorlds.MountAndBlade\\AI\\StrategicArea.cs", "MarkSlotAtIndex", 330);
+		}
+
+		// Token: 0x06001296 RID: 4758 RVA: 0x0003AE48 File Offset: 0x00039048
+		bool IDetachment.IsAgentUsingOrInterested(Agent agent)
+		{
+			return this._agents.Contains(agent);
+		}
+
+		// Token: 0x06001297 RID: 4759 RVA: 0x0003AE58 File Offset: 0x00039058
+		void IDetachment.OnFormationLeave(Formation formation)
+		{
+			for (int i = this._agents.Count - 1; i >= 0; i--)
+			{
+				Agent agent = this._agents[i];
+				if (agent.Formation == formation && !agent.IsPlayerControlled)
+				{
+					((IDetachment)this).RemoveAgent(agent);
+					formation.AttachUnit(agent);
+				}
+			}
+		}
+
+		// Token: 0x06001298 RID: 4760 RVA: 0x0003AEA9 File Offset: 0x000390A9
+		public bool IsStandingPointAvailableForAgent(Agent agent)
+		{
+			return this._agents.Count < this._capacity;
+		}
+
+		// Token: 0x06001299 RID: 4761 RVA: 0x0003AEC0 File Offset: 0x000390C0
+		private void CacheGlobalWorldFrame()
+		{
+			WeakGameEntity gameEntity = base.GameEntity;
+			MatrixFrame globalFrame = gameEntity.GetGlobalFrame();
+			if (!globalFrame.rotation.NearlyEquals(in this._cachedGlobalScaledRotation, 1E-05f) || !globalFrame.origin.AsVec2.NearlyEquals(this._cachedGlobalWorldFrame.Origin.AsVec2, 1E-05f))
+			{
+				this._cachedGlobalScaledRotation = globalFrame.rotation;
+				this._cachedGlobalWorldFrame = new WorldFrame(globalFrame.rotation, new WorldPosition(gameEntity.Scene, globalFrame.origin));
+				this._cachedGlobalWorldFrame.Rotation.OrthonormalizeAccordingToForwardAndKeepUpAsZAxis();
+			}
+		}
+
+		// Token: 0x0600129A RID: 4762 RVA: 0x0003AF60 File Offset: 0x00039160
+		private WorldFrame GetShimmiedGlobalWorldFrameMT()
+		{
+			this.CacheGlobalWorldFrame();
+			if (this._shimmyLocalPosition.IsNonZero)
+			{
+				WorldPosition origin = this._cachedGlobalWorldFrame.Origin;
+				origin.SetVec2(this._cachedGlobalWorldFrame.ToGroundMatrixFrameMT().TransformToParent(in this._shimmyLocalPosition).AsVec2);
+				return new WorldFrame(this._cachedGlobalWorldFrame.Rotation, origin);
+			}
+			return this._cachedGlobalWorldFrame;
+		}
+
+		// Token: 0x0600129B RID: 4763 RVA: 0x0003AFCC File Offset: 0x000391CC
+		public List<float> GetTemplateCostsOfAgent(Agent candidate, List<float> oldValue)
+		{
+			WorldPosition worldPosition = candidate.GetWorldPosition();
+			this.CacheGlobalWorldFrame();
+			float num = (candidate.Mission.Scene.DoesPathExistBetweenPositions(worldPosition, this._cachedGlobalWorldFrame.Origin) ? worldPosition.GetNavMeshVec3().DistanceSquared(this._cachedGlobalWorldFrame.Origin.GetNavMeshVec3()) : float.MaxValue);
+			num *= MissionGameModels.Current.AgentStatCalculateModel.GetDetachmentCostMultiplierOfAgent(candidate, this);
+			List<float> list = oldValue ?? new List<float>(this._capacity);
+			list.Clear();
+			for (int i = 0; i < this._capacity; i++)
+			{
+				list.Add(num);
+			}
+			return list;
+		}
+
+		// Token: 0x0600129C RID: 4764 RVA: 0x0003B073 File Offset: 0x00039273
+		float IDetachment.GetExactCostOfAgentAtSlot(Agent candidate, int slotIndex)
+		{
+			Debug.FailedAssert("This should never have been called because this detachment does not seek to replace moving agents.", "C:\\BuildAgent\\work\\mb3\\Source\\Bannerlord\\TaleWorlds.MountAndBlade\\AI\\StrategicArea.cs", "GetExactCostOfAgentAtSlot", 408);
+			return 0f;
+		}
+
+		// Token: 0x0600129D RID: 4765 RVA: 0x0003B094 File Offset: 0x00039294
+		public float GetTemplateWeightOfAgent(Agent candidate)
+		{
+			WorldPosition worldPosition = candidate.GetWorldPosition();
+			this.CacheGlobalWorldFrame();
+			WorldPosition origin = this._cachedGlobalWorldFrame.Origin;
+			if (!candidate.Mission.Scene.DoesPathExistBetweenPositions(worldPosition, origin))
+			{
+				return float.MaxValue;
+			}
+			return worldPosition.GetNavMeshVec3().DistanceSquared(origin.GetNavMeshVec3());
+		}
+
+		// Token: 0x0600129E RID: 4766 RVA: 0x0003B0EC File Offset: 0x000392EC
+		public float? GetWeightOfAgentAtNextSlot(List<Agent> newAgents, out Agent match)
+		{
+			float? weightOfNextSlot = this.GetWeightOfNextSlot(newAgents[0].Team.Side);
+			if (this._agents.Count < this._capacity)
+			{
+				Vec3 position = base.GameEntity.GlobalPosition;
+				match = newAgents.MinBy<Agent, float>((Agent a) => a.Position.DistanceSquared(position));
+				return weightOfNextSlot;
+			}
+			match = null;
+			return null;
+		}
+
+		// Token: 0x0600129F RID: 4767 RVA: 0x0003B160 File Offset: 0x00039360
+		public float? GetWeightOfAgentAtNextSlot(List<ValueTuple<Agent, float>> agentTemplateScores, out Agent match)
+		{
+			float? weight = this.GetWeightOfNextSlot(agentTemplateScores[0].Item1.Team.Side);
+			if (this._agents.Count < this._capacity)
+			{
+				IEnumerable<ValueTuple<Agent, float>> enumerable = agentTemplateScores.Where<ValueTuple<Agent, float>>(delegate(ValueTuple<Agent, float> a)
+				{
+					Agent item = a.Item1;
+					if (item.IsDetachedFromFormation)
+					{
+						float detachmentWeight = item.DetachmentWeight;
+						float? num = weight * 0.4f;
+						return (detachmentWeight < num.GetValueOrDefault()) & (num != null);
+					}
+					return true;
+				});
+				if (enumerable.Any<ValueTuple<Agent, float>>())
+				{
+					match = enumerable.MinBy<ValueTuple<Agent, float>, float>((ValueTuple<Agent, float> a) => a.Item2).Item1;
+					return weight;
+				}
+			}
+			match = null;
+			return null;
+		}
+
+		// Token: 0x060012A0 RID: 4768 RVA: 0x0003B204 File Offset: 0x00039404
+		public float? GetWeightOfAgentAtOccupiedSlot(Agent detachedAgent, List<Agent> newAgents, out Agent match)
+		{
+			float weightOfOccupiedSlot = this.GetWeightOfOccupiedSlot(detachedAgent);
+			Vec3 position = base.GameEntity.GlobalPosition;
+			match = newAgents.MinBy<Agent, float>((Agent a) => a.Position.DistanceSquared(position));
+			return new float?(weightOfOccupiedSlot * 0.5f);
+		}
+
+		// Token: 0x060012A1 RID: 4769 RVA: 0x0003B251 File Offset: 0x00039451
+		public void RemoveAgent(Agent agent)
+		{
+			this._agents.Remove(agent);
+			agent.SetPreciseRangedAimingEnabled(false);
+		}
+
+		// Token: 0x060012A2 RID: 4770 RVA: 0x0003B267 File Offset: 0x00039467
+		public int GetNumberOfUsableSlots()
+		{
+			return this._capacity;
+		}
+
+		// Token: 0x060012A3 RID: 4771 RVA: 0x0003B26F File Offset: 0x0003946F
+		private Formation GetSimulationFormation(Formation formation)
+		{
+			if (!this._simulationFormations.ContainsKey(formation))
+			{
+				this._simulationFormations[formation] = new Formation(null, -1);
+			}
+			return this._simulationFormations[formation];
+		}
+
+		// Token: 0x060012A4 RID: 4772 RVA: 0x0003B2A0 File Offset: 0x000394A0
+		protected internal override bool OnCheckForProblems()
+		{
+			bool flag = base.OnCheckForProblems();
+			if (base.GameEntity.IsVisibleIncludeParents() && this.CalculateCapacity() == 1)
+			{
+				MatrixFrame globalFrame = base.GameEntity.GetGlobalFrame();
+				WorldFrame worldFrame = new WorldFrame(globalFrame.rotation, new WorldPosition(base.Scene, globalFrame.origin));
+				if (worldFrame.Origin.GetNavMesh() == UIntPtr.Zero)
+				{
+					uint upgradeLevelMaskCumulative = (uint)base.GameEntity.GetUpgradeLevelMaskCumulative();
+					int upgradeLevelCount = base.Scene.GetUpgradeLevelCount();
+					string text = "";
+					for (int i = 0; i < upgradeLevelCount; i++)
+					{
+						if (((ulong)upgradeLevelMaskCumulative & (ulong)(1L << (i & 31))) != 0UL)
+						{
+							text = text + base.Scene.GetUpgradeLevelNameOfIndex(i) + ",";
+						}
+					}
+					MBEditor.AddEntityWarning(base.GameEntity, string.Concat(new object[]
+					{
+						"Strategic archer position at position at X=",
+						globalFrame.origin.X,
+						" Y=",
+						globalFrame.origin.Y,
+						" Z=",
+						globalFrame.origin.Z,
+						"doesn't yield a viable frame. It may be in the air, underground or off the navmesh, please check. Scene: ",
+						base.Scene.GetName(),
+						"Upgrade Mask: ",
+						upgradeLevelMaskCumulative,
+						", Upgrade Level Names: ",
+						text
+					}));
+					flag = true;
+				}
+			}
+			return flag;
+		}
+
+		// Token: 0x060012A5 RID: 4773 RVA: 0x0003B420 File Offset: 0x00039620
+		public WorldFrame? GetAgentFrame(Agent agent)
+		{
+			Vec2 vec;
+			if (this._capacity <= 1)
+			{
+				float totalMissionTime = MBCommon.GetTotalMissionTime();
+				StrategicArea.ShimmyDirection shimmyDirection = this._shimmyDirection;
+				int num = 0;
+				StrategicArea.StrategicAreaMutableTuple[] strategicAreaSidesScoreTally = this._strategicAreaSidesScoreTally;
+				for (int i = 0; i < strategicAreaSidesScoreTally.Length; i++)
+				{
+					if (strategicAreaSidesScoreTally[i] != null)
+					{
+						num++;
+					}
+				}
+				bool flag = num > 1;
+				if (flag && this._lastShootTime < agent.LastRangedAttackTime)
+				{
+					this._lastShootTime = agent.LastRangedAttackTime;
+					StrategicArea.StrategicAreaMutableTuple strategicAreaMutableTuple = this._strategicAreaSidesScoreTally[(int)this._shimmyDirection];
+					if (strategicAreaMutableTuple != null)
+					{
+						strategicAreaMutableTuple.RangedHitScoredCount++;
+					}
+					else
+					{
+						this._strategicAreaSidesScoreTally[(int)this._shimmyDirection] = new StrategicArea.StrategicAreaMutableTuple(0, 1);
+					}
+				}
+				bool flag2 = false;
+				if (flag && this._lastShimmyTime < agent.LastRangedHitTime)
+				{
+					StrategicArea.StrategicAreaMutableTuple strategicAreaMutableTuple2 = this._strategicAreaSidesScoreTally[(int)this._shimmyDirection];
+					if (strategicAreaMutableTuple2 != null)
+					{
+						strategicAreaMutableTuple2.RangedHitReceivedCount++;
+					}
+					else
+					{
+						this._strategicAreaSidesScoreTally[(int)this._shimmyDirection] = new StrategicArea.StrategicAreaMutableTuple(1, 0);
+					}
+					flag2 = true;
+				}
+				bool flag3 = false;
+				if (flag && !flag2 && totalMissionTime - MathF.Max(agent.LastRangedAttackTime, this._lastShimmyTime) > 8f)
+				{
+					StrategicArea.StrategicAreaMutableTuple strategicAreaMutableTuple3 = this._strategicAreaSidesScoreTally[(int)this._shimmyDirection];
+					if (strategicAreaMutableTuple3 != null)
+					{
+						strategicAreaMutableTuple3.RangedHitScoredCount--;
+					}
+					else
+					{
+						this._strategicAreaSidesScoreTally[(int)this._shimmyDirection] = new StrategicArea.StrategicAreaMutableTuple(0, -1);
+					}
+					flag3 = true;
+				}
+				if (flag2 || flag3)
+				{
+					int num2 = int.MinValue;
+					int num3 = 0;
+					for (int j = 0; j < 5; j++)
+					{
+						if (j != (int)this._shimmyDirection && this._strategicAreaSidesScoreTally[j] != null)
+						{
+							int num4 = this._strategicAreaSidesScoreTally[j].RangedHitScoredCount - this._strategicAreaSidesScoreTally[j].RangedHitReceivedCount;
+							if (num4 > num2)
+							{
+								num2 = num4;
+								num3 = 1;
+							}
+							else if (num4 == num2)
+							{
+								num3++;
+							}
+						}
+					}
+					int num5 = MBRandom.RandomInt(num3 - 1);
+					for (int k = 0; k < 5; k++)
+					{
+						if (k != (int)this._shimmyDirection && this._strategicAreaSidesScoreTally[k] != null && this._strategicAreaSidesScoreTally[k].RangedHitScoredCount - this._strategicAreaSidesScoreTally[k].RangedHitReceivedCount == num2 && --num5 < 0)
+						{
+							shimmyDirection = (StrategicArea.ShimmyDirection)k;
+						}
+					}
+					this._doesFrameNeedUpdate = true;
+				}
+				if (!this._disableShimmy && this._doesFrameNeedUpdate)
+				{
+					this.CacheGlobalWorldFrame();
+					vec = this._cachedGlobalWorldFrame.Rotation.f.AsVec2;
+					Vec2 vec2 = vec.Normalized();
+					Vec2 vec3;
+					switch (shimmyDirection)
+					{
+					case StrategicArea.ShimmyDirection.Center:
+						vec3 = Vec2.Zero;
+						break;
+					case StrategicArea.ShimmyDirection.Left:
+						vec3 = vec2.RightVec();
+						break;
+					case StrategicArea.ShimmyDirection.Forward:
+						vec3 = vec2;
+						break;
+					case StrategicArea.ShimmyDirection.Right:
+						vec3 = vec2.LeftVec();
+						break;
+					case StrategicArea.ShimmyDirection.Back:
+						vec3 = -vec2;
+						break;
+					default:
+						vec3 = Vec2.Zero;
+						break;
+					}
+					int num6 = 8;
+					bool flag4 = false;
+					this._cachedGlobalWorldFrame.Origin.GetGroundZMT();
+					WorldPosition worldPosition = this._cachedGlobalWorldFrame.Origin;
+					while (num6-- > 0)
+					{
+						worldPosition.SetVec2(worldPosition.AsVec2 + (0.6f + 0.05f * (float)num6) * vec3);
+						if (worldPosition.GetNavMeshMT() != UIntPtr.Zero && MathF.Abs(this._cachedGlobalWorldFrame.Origin.GetGroundZMT() - worldPosition.GetGroundZMT()) <= agent.Monster.BodyCapsuleRadius * 1.2f && !Mission.Current.IsPositionOnAnyBlockerNavMeshFace(worldPosition.GetGroundVec3MT()))
+						{
+							flag4 = true;
+							break;
+						}
+						worldPosition = this._cachedGlobalWorldFrame.Origin;
+					}
+					this._doesFrameNeedUpdate = false;
+					if (!flag4)
+					{
+						this._strategicAreaSidesScoreTally[(int)shimmyDirection] = null;
+					}
+					else
+					{
+						this._shimmyDirection = shimmyDirection;
+						this._lastShimmyTime = totalMissionTime;
+						MatrixFrame matrixFrame = this._cachedGlobalWorldFrame.ToGroundMatrixFrameMT();
+						Vec3 groundVec3MT = worldPosition.GetGroundVec3MT();
+						this._shimmyLocalPosition = matrixFrame.TransformToLocal(in groundVec3MT);
+					}
+				}
+				return new WorldFrame?(this.GetShimmiedGlobalWorldFrameMT());
+			}
+			int num7 = this._agents.IndexOf(agent);
+			Formation formation = agent.Formation;
+			Formation simulationFormation = this.GetSimulationFormation(formation);
+			this.CacheGlobalWorldFrame();
+			Formation formation2 = formation;
+			Formation formation3 = simulationFormation;
+			int num8 = num7;
+			vec = this._cachedGlobalWorldFrame.Rotation.f.AsVec2;
+			vec = vec.Normalized();
+			WorldPosition? worldPosition2;
+			Vec2? vec4;
+			formation2.GetUnitPositionWithIndexAccordingToNewOrder(formation3, num8, in this._cachedGlobalWorldFrame.Origin, in vec, this._width, this._unitSpacing, this._agents.Count, out worldPosition2, out vec4);
+			if (worldPosition2 != null)
+			{
+				return new WorldFrame?(new WorldFrame(this._cachedGlobalWorldFrame.Rotation, worldPosition2.Value));
+			}
+			return new WorldFrame?(agent.GetWorldFrame());
+		}
+
+		// Token: 0x060012A6 RID: 4774 RVA: 0x0003B8A6 File Offset: 0x00039AA6
+		private static float CalculateWeight(int capacity, int index)
+		{
+			return (float)(capacity - index) * 1f / (float)capacity * 0.5f;
+		}
+
+		// Token: 0x060012A7 RID: 4775 RVA: 0x0003B8BC File Offset: 0x00039ABC
+		public float? GetWeightOfNextSlot(BattleSideEnum side)
+		{
+			if (this._agents.Count < this._capacity)
+			{
+				return new float?(StrategicArea.CalculateWeight(this._capacity, this._agents.Count));
+			}
+			return null;
+		}
+
+		// Token: 0x060012A8 RID: 4776 RVA: 0x0003B901 File Offset: 0x00039B01
+		public float GetWeightOfOccupiedSlot(Agent agent)
+		{
+			return StrategicArea.CalculateWeight(this._capacity, this._agents.IndexOf(agent));
+		}
+
+		// Token: 0x060012A9 RID: 4777 RVA: 0x0003B91A File Offset: 0x00039B1A
+		public bool IsUsableBy(BattleSideEnum side)
+		{
+			return this._side == side || this._side == BattleSideEnum.None;
+		}
+
+		// Token: 0x060012AA RID: 4778 RVA: 0x0003B933 File Offset: 0x00039B33
+		float IDetachment.GetDetachmentWeight(BattleSideEnum side)
+		{
+			if (this._agents.Count < this._capacity)
+			{
+				return (float)(this._capacity - this._agents.Count) * 1f / (float)this._capacity;
+			}
+			return float.MinValue;
+		}
+
+		// Token: 0x060012AB RID: 4779 RVA: 0x0003B96F File Offset: 0x00039B6F
+		void IDetachment.ResetEvaluation()
+		{
+			this._isEvaluated = false;
+		}
+
+		// Token: 0x060012AC RID: 4780 RVA: 0x0003B978 File Offset: 0x00039B78
+		bool IDetachment.IsEvaluated()
+		{
+			return this._isEvaluated;
+		}
+
+		// Token: 0x060012AD RID: 4781 RVA: 0x0003B980 File Offset: 0x00039B80
+		void IDetachment.SetAsEvaluated()
+		{
+			this._isEvaluated = true;
+		}
+
+		// Token: 0x060012AE RID: 4782 RVA: 0x0003B989 File Offset: 0x00039B89
+		float IDetachment.GetDetachmentWeightFromCache()
+		{
+			return this._cachedDetachmentWeight;
+		}
+
+		// Token: 0x060012AF RID: 4783 RVA: 0x0003B991 File Offset: 0x00039B91
+		float IDetachment.ComputeAndCacheDetachmentWeight(BattleSideEnum side)
+		{
+			this._cachedDetachmentWeight = ((IDetachment)this).GetDetachmentWeight(side);
+			return this._cachedDetachmentWeight;
+		}
+
+		// Token: 0x04000490 RID: 1168
+		private List<Agent> _agents;
+
+		// Token: 0x04000491 RID: 1169
+		[EditableScriptComponentVariable(true, "")]
+		private float _width;
+
+		// Token: 0x04000492 RID: 1170
+		private int _unitSpacing;
+
+		// Token: 0x04000493 RID: 1171
+		private int _capacity;
+
+		// Token: 0x04000494 RID: 1172
+		private MBList<Formation> _userFormations;
+
+		// Token: 0x04000495 RID: 1173
+		private Dictionary<Formation, Formation> _simulationFormations;
+
+		// Token: 0x04000496 RID: 1174
+		[EditableScriptComponentVariable(true, "")]
+		private BattleSideEnum _side;
+
+		// Token: 0x04000497 RID: 1175
+		[EditableScriptComponentVariable(true, "")]
+		private float _depth = 1f;
+
+		// Token: 0x04000498 RID: 1176
+		[EditableScriptComponentVariable(true, "")]
+		private float _distanceToCheck = 10f;
+
+		// Token: 0x04000499 RID: 1177
+		[EditableScriptComponentVariable(true, "")]
+		private bool _ignoreHeight = true;
+
+		// Token: 0x0400049A RID: 1178
+		[EditableScriptComponentVariable(true, "")]
+		private bool _disableShimmy;
+
+		// Token: 0x0400049B RID: 1179
+		private List<DestructableComponent> _nearbyDestructibleObjects = new List<DestructableComponent>();
+
+		// Token: 0x0400049C RID: 1180
+		private bool _isActive;
+
+		// Token: 0x0400049D RID: 1181
+		private float _lastShimmyTime;
+
+		// Token: 0x0400049E RID: 1182
+		private float _lastShootTime;
+
+		// Token: 0x0400049F RID: 1183
+		private StrategicArea.ShimmyDirection _shimmyDirection;
+
+		// Token: 0x040004A0 RID: 1184
+		private bool _doesFrameNeedUpdate = true;
+
+		// Token: 0x040004A1 RID: 1185
+		private readonly StrategicArea.StrategicAreaMutableTuple[] _strategicAreaSidesScoreTally = new StrategicArea.StrategicAreaMutableTuple[5];
+
+		// Token: 0x040004A2 RID: 1186
+		private Mat3 _cachedGlobalScaledRotation;
+
+		// Token: 0x040004A3 RID: 1187
+		private WorldFrame _cachedGlobalWorldFrame;
+
+		// Token: 0x040004A4 RID: 1188
+		private Vec3 _shimmyLocalPosition;
+
+		// Token: 0x040004A5 RID: 1189
+		private bool _isEvaluated;
+
+		// Token: 0x040004A6 RID: 1190
+		private float _cachedDetachmentWeight;
+
+		// Token: 0x02000489 RID: 1161
+		private class StrategicAreaMutableTuple
+		{
+			// Token: 0x06003941 RID: 14657 RVA: 0x000E8E30 File Offset: 0x000E7030
+			public StrategicAreaMutableTuple(int rangedHitReceivedCount, int rangedHitScoredCount)
+			{
+				this.RangedHitReceivedCount = rangedHitReceivedCount;
+				this.RangedHitScoredCount = rangedHitScoredCount;
+			}
+
+			// Token: 0x04001ABA RID: 6842
+			public int RangedHitReceivedCount;
+
+			// Token: 0x04001ABB RID: 6843
+			public int RangedHitScoredCount;
+		}
+
+		// Token: 0x0200048A RID: 1162
+		private enum ShimmyDirection
+		{
+			// Token: 0x04001ABD RID: 6845
+			Center,
+			// Token: 0x04001ABE RID: 6846
+			Left,
+			// Token: 0x04001ABF RID: 6847
+			Forward,
+			// Token: 0x04001AC0 RID: 6848
+			Right,
+			// Token: 0x04001AC1 RID: 6849
+			Back,
+			// Token: 0x04001AC2 RID: 6850
+			NumDirections
+		}
+	}
+}
